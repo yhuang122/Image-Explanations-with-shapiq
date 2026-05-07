@@ -55,3 +55,38 @@ The Factory manages the construction of the imputer through the following steps:
     *   `gradient`: Injects `GradientGuidedSegmenter` for a static, non-uniform spatial prior.
     *   `adaptive`: Injects `AdaptiveSegmenter` for dynamic, coarse-to-fine sub-grid exploration.
     *   `hybrid`: Injects `HybridSegmenter` for maximum pruning efficiency via gradient priors and stateful evaluation.
+
+---
+
+## Integrating `scikit-image` (skimage)
+
+The `scikit-image` library provides highly optimized, out-of-the-box algorithms that perfectly align with the `Segmenters` in this architecture. Leveraging `skimage` eliminates the need to reinvent the wheel, particularly for image segmentation and preprocessing.
+
+### 1. Mapping Segmenters to `skimage` Methods
+
+*   **SLICSegmenter (Perceptual Superpixel Segmentation):**
+    *   **Method:** `skimage.segmentation.slic`
+    *   **Application:** Provides the most classic and mature SLIC implementation. By configuring `n_segments` and `compactness`, it preserves natural edges and successfully mitigates OOD artifacts when analyzing CNNs.
+*   **PatchSegmenter (Rigid Grid Segmentation):**
+    *   **Method:** `skimage.util.view_as_blocks` or `skimage.util.view_as_windows`
+    *   **Application:** While PyTorch's `unfold` can handle this, `skimage` offers highly intuitive APIs to rapidly slice images into fixed-size patches (e.g., 16x16 or 32x32), aligning mathematically with ViT's Patch Embedding logic.
+*   **GradientGuided / HybridSegmenter (Heuristic & Hybrid Segmentation):**
+    *   **Method:** `skimage.segmentation.watershed` paired with `skimage.filters.sobel`, or `skimage.segmentation.felzenszwalb`.
+    *   **Application:** Natural image gradients can be incorporated alongside model backpropagation gradients. Sobel operators extract edges quickly, while the watershed algorithm subdivides complex (high-frequency) regions and merges smooth (low-frequency) backgrounds, serving as an excellent static baseline for Hybrid strategies.
+
+### 2. ⚠️ Architectural Warning: The CPU vs. GPU Bottleneck
+
+While `scikit-image` provides rich and ready-to-use algorithms, it operates **exclusively on the CPU** (backed by NumPy and Cython). 
+
+In Shapley value approximation (e.g., `approximate_crossmodal`), the `Approximator` generates thousands of binary mask combinations. Transferring images back and forth between GPU and CPU (`.cpu().numpy()` $\rightarrow$ `skimage` $\rightarrow$ `.to('cuda')`) during every sampling loop of the forward pass creates extreme I/O overhead. This bottleneck would violate the core performance objective (e.g., matching FIxLIP's 20x acceleration).
+
+### 3. Engineering Solution: "CPU Planning, GPU Execution"
+
+To marry the convenience of `skimage` with the speed of deep learning frameworks, the architecture implements a **"CPU Planning, GPU Execution"** paradigm:
+
+1.  **Preprocessing Phase (CPU - `skimage`):** 
+    During `Segmenter` initialization (executed **only once** per input), invoke operations like `skimage.segmentation.slic`. Generate a 2D integer index mask matrix that maps pixels to their corresponding player IDs (e.g., defining which pixels belong to Player 1 vs. Player 2).
+2.  **Execution Phase (GPU - Framework Ops):** 
+    Convert this predefined index matrix into a native PyTorch/JAX Tensor and permanently load it onto the GPU. For the thousands of subsequent Shapley masking iterations, the `TorchOps` or `JaxOps` intercept the forward pass, using purely native tensor operations (e.g., `torch.where`, `torch.gather`) to apply masks (like mean padding or zeroing out) directly on the GPU.
+
+By treating `scikit-image` strictly as a one-time "blueprint generator" and utilizing the GPU for heavy lifting, the architecture preserves blazing-fast execution speeds.
