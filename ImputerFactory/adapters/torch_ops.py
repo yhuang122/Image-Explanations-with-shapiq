@@ -1,5 +1,5 @@
 from .base import TensorOps
 
 class TorchOps(TensorOps):
-    """PyTorch backend manipulations."""
+    """PyTorch implementation of tensor manipulations."""
     pass
