@@ -8,6 +8,13 @@ class MeanMasker(BaseMasker):
 
     def apply(self, inputs, masks):
         """
-        TODO: Apply masks to pixel values, e.g., inputs['pixel_values'] * masks
+        Args:
+            inputs: dict containing batched model inputs. E.g., inputs['pixel_values'] of 
+                shape (batch_size, n_channels, image_size, image_size).
+            masks: torch.Tensor, shape (batch_size, n_channels, image_size, image_size).
+                Provided by the Segmenter.
+                
+        Returns:
+            dict: Updated inputs dictionary with masked logic applied.
         """
         pass

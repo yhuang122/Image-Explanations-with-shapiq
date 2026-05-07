@@ -90,3 +90,28 @@ To marry the convenience of `skimage` with the speed of deep learning frameworks
     Convert this predefined index matrix into a native PyTorch/JAX Tensor and permanently load it onto the GPU. For the thousands of subsequent Shapley masking iterations, the `TorchOps` or `JaxOps` intercept the forward pass, using purely native tensor operations (e.g., `torch.where`, `torch.gather`) to apply masks (like mean padding or zeroing out) directly on the GPU.
 
 By treating `scikit-image` strictly as a one-time "blueprint generator" and utilizing the GPU for heavy lifting, the architecture preserves blazing-fast execution speeds.
+
+# Example Usage
+```python
+from ImputerFactory.factory import ImageImputerFactory
+
+# 1. Instantiate the factory; best configurations are inferred automatically
+factory = ImageImputerFactory()
+
+# 2. Build an optimized, stateful executor Core (Imputer)
+# Seamlessly enables your custom hybrid accelerator
+imputer = factory.build(
+    model=model, 
+    processor=processor, 
+    backend="pytorch", 
+    accelerator="hybrid" # Or None (falls back to basic Patch+Attention pipeline)
+)
+
+# 3. Inject this lightweight, pre-assembled Imputer into the Game
+game = src.game_huggingface.VisionLanguageGame(
+    imputer=imputer, # The Game now handles scheduling only, without direct tensor manipulation
+    input_image=input_image,
+    input_text=input_text,
+    batch_size=64
+)
+```
