@@ -1,117 +1,135 @@
-## ImageImputer Architecture Overview
+# ImageImputer — Module Implementation Status
 
-### ImageImputerFactory
-The **ImageImputerFactory** serves as the central assembly line, finalizing the blueprint, instantiating required components, and injecting them into the `ImageImputer`. It establishes necessary feedback loops (required by adaptive accelerators) and returns a fully optimized, ready-to-run execution container.
+> Last updated: 2026-05-09
 
----
+## Implementation Progress Summary
 
-### 1. Backend Adapters
-These adapters abstract all tensor manipulations into a `TensorOps` interface.
-*   **Concrete Implementations:** `TorchOps` and `JaxOps` encapsulate framework-specific behaviors.
-*   **Purpose:** Ensures that upper-level business logic remains completely framework-agnostic.
+| Module | Component | Status | Notes |
+|---|---|---|---|
+| **Data Types** | `SpatialLayout` | ✅ Done | Player↔pixel/token mapping metadata |
+| | `PhysicalMask` | ✅ Done | Concrete masks: `image_binary_mask` (N,C,H,W) + `text_attention_mask` (N,L) |
+| | `ProcessorOutput` | ✅ Done | Standardized HuggingFace inputs wrapper |
+| **Segmenters** | `BaseSegmenter` | ✅ Done | Abstract: `get_layout()` + `generate_masks()` |
+| | `PatchSegmenter` | ✅ Done | Rigid grid, supports CLIP/SigLIP/SigLIP2 text masking |
+| | `SLICSegmenter` | ⏳ Stub | CPU blueprint only, needs GPU execution path |
+| | `GradientGuidedSegmenter` | ⏳ Stub | Needs gradient extraction + watershed layout |
+| | `AdaptiveSegmenter` | ⏳ Stub | Needs coarse-to-fine subdivision logic |
+| | `HybridSegmenter` | ⏳ Stub | Composition of Gradient + Adaptive |
+| **Maskers** | `BaseMasker` | ✅ Done | Abstract: `apply(ProcessorOutput, PhysicalMask)` |
+| | `MeanMasker` | ✅ Done | Multiplicative binary mask + attention_mask swap |
+| | `AttentionMasker` | ⏳ Stub | Needs negative-infinity self-attention injection |
+| **Core** | `ImageImputer` | ✅ Done | `forward_1d` + `forward_crossmodal` with batching & device mgmt |
+| **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + MeanMasker |
+| **Adapters** | `TensorOps` / `TorchOps` / `JaxOps` | ⏳ Stub | Interface defined, implementations pending |
+| **Integration** | `VisionLanguageGame` | ✅ Done | Thin adapter: delegates to Imputer, ~75 lines |
 
-### 2. Segmenters
-Responsible for spatial division of the input data.
-*   **PatchSegmenter:** Uses rigid grids, mathematically aligned with Vision Transformers (ViTs).
-*   **SLICSegmenter:** Uses perceptual superpixels, preserving natural edges to prevent Out-of-Distribution (OOD) artifacts for CNNs.
-*   **GradientGuidedSegmenter:** 
-    *   Acts as a gradient-to-layout translator. 
-    *   Ingests a pre-computed backpropagation gradient map to generate a static, non-uniform segmentation layout. 
-    *   High-gradient regions are finely partitioned, while near-zero zones are consolidated into massive background blocks. 
-    *   Relies solely on heuristics and does not participate in the evaluation loop.
-*   **AdaptiveSegmenter:** 
-    *   Implements a coarse-to-fine, score-driven spatial division. 
-    *   Initializes with a uniform coarse grid and dynamically subdivides high-scoring regions based on intermediate Shapley attribution scores. 
-    *   Freezes low-scoring blocks to aggressively prune the combinatorial search space.
-*   **HybridSegmenter:** 
-    *   The structural synthesis utilizing the **Composition pattern**. 
-    *   Uses the `GradientGuidedSegmenter` to generate an intelligent initial layout rather than a blind grid. 
-    *   Feeds this baseline into the `AdaptiveSegmenter` logic to refine critical regions as empirical Shapley scores are computed. 
-    *   Marries rapid gradient localization with rigorous perturbation fairness.
-
-### 3. Maskers
-Responsible for feature occlusion.
-*   **MeanMasker:** Injects average pixel values directly into the input tensor.
-*   **AttentionMasker:** Intercepts the model's internal self-attention mechanism by generating negative-infinity mask matrices (via JAX/HuggingFace parameters or raw PyTorch internal hooks).
+### Legend
+- ✅ Done — fully implemented and tested
+- ⏳ Stub — skeleton exists, logic outstanding
+- ❌ Not started — not yet created
 
 ---
 
-### 4. Core Orchestration (`ImageImputer`)
-*   **Layout Request & Feedback Loop:** Requests the spatial layout from the Segmenter. For stateful segmenters (Adaptive/Hybrid), the Orchestrator feeds previous Shapley evaluation results back to the Segmenter to refine the next layout.
-*   **Translation:** Translates the binary Shapley coalition array into a physical tensor mask based on the active layout.
-*   **Execution:** Directs the Masker to apply the physical mask and executes the model forward pass with modified inputs/kwargs.
+## Data Transfer Contract
 
----
-
-### 5. The Assembly Line (`ImageImputerFactory`)
-The Factory manages the construction of the imputer through the following steps:
-
-1.  **Backend Selection:** The user provides a pre-trained model and specifies the backend (`"pytorch"` or `"jax"`).
-2.  **Routing & Accelerator Selection:** Inspects the model to establish a functional baseline and injects high-performance spatial engines based on configuration.
-3.  **Baseline Configuration:** Infers default components:
-    *   **Transformers:** `PatchSegmenter` + `AttentionMasker`.
-    *   **CNNs:** `SLICSegmenter` + `MeanMasker`.
-4.  **Accelerator Selector:** An optional `accelerator` parameter allows for overriding the baseline to speed up Shapley convergence:
-    *   `gradient`: Injects `GradientGuidedSegmenter` for a static, non-uniform spatial prior.
-    *   `adaptive`: Injects `AdaptiveSegmenter` for dynamic, coarse-to-fine sub-grid exploration.
-    *   `hybrid`: Injects `HybridSegmenter` for maximum pruning efficiency via gradient priors and stateful evaluation.
-
----
-
-## Integrating `scikit-image` (skimage)
-
-The `scikit-image` library provides highly optimized, out-of-the-box algorithms that perfectly align with the `Segmenters` in this architecture. Leveraging `skimage` eliminates the need to reinvent the wheel, particularly for image segmentation and preprocessing.
-
-### 1. Mapping Segmenters to `skimage` Methods
-
-*   **SLICSegmenter (Perceptual Superpixel Segmentation):**
-    *   **Method:** `skimage.segmentation.slic`
-    *   **Application:** Provides the most classic and mature SLIC implementation. By configuring `n_segments` and `compactness`, it preserves natural edges and successfully mitigates OOD artifacts when analyzing CNNs.
-*   **PatchSegmenter (Rigid Grid Segmentation):**
-    *   **Method:** `skimage.util.view_as_blocks` or `skimage.util.view_as_windows`
-    *   **Application:** While PyTorch's `unfold` can handle this, `skimage` offers highly intuitive APIs to rapidly slice images into fixed-size patches (e.g., 16x16 or 32x32), aligning mathematically with ViT's Patch Embedding logic.
-*   **GradientGuided / HybridSegmenter (Heuristic & Hybrid Segmentation):**
-    *   **Method:** `skimage.segmentation.watershed` paired with `skimage.filters.sobel`, or `skimage.segmentation.felzenszwalb`.
-    *   **Application:** Natural image gradients can be incorporated alongside model backpropagation gradients. Sobel operators extract edges quickly, while the watershed algorithm subdivides complex (high-frequency) regions and merges smooth (low-frequency) backgrounds, serving as an excellent static baseline for Hybrid strategies.
-
-### 2. ⚠️ Architectural Warning: The CPU vs. GPU Bottleneck
-
-While `scikit-image` provides rich and ready-to-use algorithms, it operates **exclusively on the CPU** (backed by NumPy and Cython). 
-
-In Shapley value approximation (e.g., `approximate_crossmodal`), the `Approximator` generates thousands of binary mask combinations. Transferring images back and forth between GPU and CPU (`.cpu().numpy()` $\rightarrow$ `skimage` $\rightarrow$ `.to('cuda')`) during every sampling loop of the forward pass creates extreme I/O overhead. This bottleneck would violate the core performance objective (e.g., matching FIxLIP's 20x acceleration).
-
-### 3. Engineering Solution: "CPU Planning, GPU Execution"
-
-To marry the convenience of `skimage` with the speed of deep learning frameworks, the architecture implements a **"CPU Planning, GPU Execution"** paradigm:
-
-1.  **Preprocessing Phase (CPU - `skimage`):** 
-    During `Segmenter` initialization (executed **only once** per input), invoke operations like `skimage.segmentation.slic`. Generate a 2D integer index mask matrix that maps pixels to their corresponding player IDs (e.g., defining which pixels belong to Player 1 vs. Player 2).
-2.  **Execution Phase (GPU - Framework Ops):** 
-    Convert this predefined index matrix into a native PyTorch/JAX Tensor and permanently load it onto the GPU. For the thousands of subsequent Shapley masking iterations, the `TorchOps` or `JaxOps` intercept the forward pass, using purely native tensor operations (e.g., `torch.where`, `torch.gather`) to apply masks (like mean padding or zeroing out) directly on the GPU.
-
-By treating `scikit-image` strictly as a one-time "blueprint generator" and utilizing the GPU for heavy lifting, the architecture preserves blazing-fast execution speeds.
-
-# Example Usage
-```python
-from ImputerFactory.factory import ImageImputerFactory
-
-# 1. Instantiate the factory; best configurations are inferred automatically
-factory = ImageImputerFactory()
-
-# 2. Build an optimized, stateful executor Core (Imputer)
-# Seamlessly enables your custom hybrid accelerator
-imputer = factory.build(
-    model=model, 
-    processor=processor, 
-    backend="pytorch", 
-    accelerator="hybrid" # Or None (falls back to basic Patch+Attention pipeline)
-)
-
-# 3. Inject this lightweight, pre-assembled Imputer into the Game
-game = src.game_huggingface.VisionLanguageGame(
-    imputer=imputer, # The Game now handles scheduling only, without direct tensor manipulation
-    input_image=input_image,
-    input_text=input_text,
-    batch_size=64
-)
 ```
+Coalitions (np.bool)                Visualization / Notebook
+        │                                    │
+        ▼                                    ▼
+┌─────────────────┐              ┌─────────────────────┐
+│   Segmenter     │              │  VisionLanguageGame  │
+│  get_layout()   │──────────────│   (thin adapter)     │
+│  generate_masks │              │  inputs / processor  │
+└────────┬────────┘              │  value_function()    │
+         │                       └──────────┬──────────┘
+         ▼                                  │
+   PhysicalMask                             │
+         │                                  │
+         ▼                                  ▼
+┌─────────────────┐              ┌─────────────────────┐
+│    Masker       │              │   ImageImputer      │
+│  apply()        │◄─────────────│  forward_1d()       │
+└────────┬────────┘              │  forward_crossmodal()│
+         │                       └─────────────────────┘
+         ▼
+   ProcessorOutput (modified) ───► model.forward() ───► np.array
+```
+
+### Key Design Decisions
+
+1. **"CPU Planning, GPU Execution"**: Segmenters produce integer index maps once on CPU (via skimage). Thousands of coalition→mask translations happen purely on GPU via native tensor ops.
+
+2. **Imputer owns the inputs**: `ImageImputer` stores `inputs_original` (ProcessorOutput), `inputs_raw` (HF dict for `.tokens()`), and `input_image`/`input_text` (for crossmodal edge cases where batch sizes diverge).
+
+3. **Game is a thin shell**: `VisionLanguageGame` delegates all masking/batching/model-forward to the Imputer. It only handles shapiq scheduling (normalization values, player counts).
+
+---
+
+## Current Implementation Details
+
+### `ImputerFactory/data.py`
+Three dataclasses serve as the universal data protocol:
+- **`SpatialLayout`**: Immutable metadata describing the spatial division. Produced once by Segmenter, consumed by Imputer.
+- **`PhysicalMask`**: Concrete tensor masks. `image_binary_mask` (N, C, H, W) float + `text_attention_mask` (N, L) int.
+- **`ProcessorOutput`**: Wraps `pixel_values`, `input_ids`, `attention_mask` with a `to_dict()` for model forwarding.
+
+### `ImputerFactory/segmenters/patch.py` — PatchSegmenter
+- Pre-computes `SpatialLayout` at init (is_stateful=False)
+- `generate_masks()` converts coalition arrays → `PhysicalMask`
+- Image: expand patch-level booleans → `patch_size×patch_size` blocks → (N, C, H, W)
+- Text: handles CLIP (BOS/EOS wrapping) vs SigLIP (right-padding) mask formats
+
+### `ImputerFactory/maskers/mean.py` — MeanMasker
+- Image: `pixel_values *= image_binary_mask` (zero-mean normalization → mean fill)
+- Text: replaces `attention_mask` with coalition-derived mask
+- Clones inputs to avoid mutation
+
+### `ImputerFactory/core/imputer.py` — ImageImputer
+- **`forward_1d(coalitions, batch_size)`**: Splits coalitions → generates masks → batches → masks → model → extracts diagonal
+- **`forward_crossmodal(coalitions_img, coalitions_txt, batch_size)`**: Double loop (image outer, text inner). Edge case: when txt_bs ≠ img_bs, re-processes via `_preprocess_batch()` using stored `input_image`/`input_text`
+- **`_model_forward()`**: Auto-detects model device, moves inputs before forward
+- Stores: `inputs_original`, `inputs_raw`, `input_image`, `input_text`, `model`, `processor`, `segmenter`, `masker`, `layout`
+
+### `ImputerFactory/factory.py` — ImageImputerFactory
+- `build(model, processor, input_image, input_text, accelerator=None)`:
+  1. Infers model type (clip/siglip/siglip2)
+  2. Preprocesses once to determine `n_players_text` + `text_total_length`
+  3. Creates `PatchSegmenter` (baseline) or raises `NotImplementedError` for accelerators
+  4. Creates `MeanMasker`
+  5. Wires `ProcessorOutput` + raw dict + raw image/text into `ImageImputer`
+
+### `src/game_huggingface.py` — VisionLanguageGame
+- Constructor: `VisionLanguageGame(imputer, batch_size=64, verbose=False)`
+- `n_players_image` / `n_players_text` from imputer layout
+- `inputs` / `processor` properties delegate to imputer (backward compat)
+- `value_function()` → `imputer.forward_1d()`
+- `value_function_crossmodal()` → `imputer.forward_crossmodal()`
+
+---
+
+## Future Work
+
+### High Priority
+- [ ] **Numerical equivalence test**: Compare imputer output vs original built-in path on the same coalitions (tolerance < 1e-6)
+- [ ] **Migrate remaining 7 experiment files** to new API (see `experiments/*.py` — all use old `VisionLanguageGame(model, processor, ...)` signature)
+
+### Medium Priority — Accelerators
+- [ ] **`GradientGuidedSegmenter`**: Extract gradient map from model → skimage watershed → non-uniform static layout
+- [ ] **`AdaptiveSegmenter`**: Coarse grid → score-driven subdivision → feedback loop (requires Imputer ↔ Segmenter state protocol for `is_stateful=True`)
+- [ ] **`HybridSegmenter`**: Composition of GradientGuided (initial) + Adaptive (refine)
+
+### Medium Priority — Maskers
+- [ ] **`AttentionMasker`**: Intercept self-attention with negative-infinity mask matrices. Requires PyTorch hook injection or HuggingFace `output_attentions` + `attention_mask` override
+
+### Low Priority — Backends
+- [ ] **`JaxOps`**: JAX-native tensor ops for Google TPU / JAX model support
+- [ ] **`TorchOps`**: Extract PyTorch-specific ops (currently inline) into adapter
+
+### Low Priority — Model Support
+- [ ] **CNN models**: `SLICSegmenter` + `MeanMasker` baseline (requires model detection heuristic beyond VLM)
+- [ ] **OpenAI API models**: `game_openai.py` integration
+
+### Known Issues
+- `forward_crossmodal` reprocesses inputs via HF processor on edge case batches (slight overhead vs original which also did this)
+- `_repeat_inputs` uses `.expand().clone()` which duplicates memory; could be optimized with stride tricks
+- No mixed-precision (AMP) support yet — relevant for larger models
