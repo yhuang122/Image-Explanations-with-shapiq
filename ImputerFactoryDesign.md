@@ -16,10 +16,10 @@
 | | `AdaptiveSegmenter` | ⏳ Stub | Needs coarse-to-fine subdivision logic |
 | | `HybridSegmenter` | ⏳ Stub | Composition of Gradient + Adaptive |
 | **Maskers** | `BaseMasker` | ✅ Done | Abstract: `apply(ProcessorOutput, PhysicalMask)` |
-| | `MeanMasker` | ✅ Done | Multiplicative binary mask + attention_mask swap |
+| | `CrossModalMeanMasker` | ✅ Done | Multiplicative binary mask (image) + attention_mask swap (text) |
 | | `AttentionMasker` | ⏳ Stub | Needs negative-infinity self-attention injection |
 | **Core** | `ImageImputer` | ✅ Done | `forward_1d` + `forward_crossmodal` with batching & device mgmt |
-| **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + MeanMasker |
+| **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalMeanMasker |
 | **Adapters** | `TensorOps` / `TorchOps` / `JaxOps` | ⏳ Stub | Interface defined, implementations pending |
 | **Integration** | `VisionLanguageGame` | ✅ Done | Thin adapter: delegates to Imputer, ~75 lines |
 
@@ -79,7 +79,7 @@ Three dataclasses serve as the universal data protocol:
 - Image: expand patch-level booleans → `patch_size×patch_size` blocks → (N, C, H, W)
 - Text: handles CLIP (BOS/EOS wrapping) vs SigLIP (right-padding) mask formats
 
-### `ImputerFactory/maskers/mean.py` — MeanMasker
+### `ImputerFactory/maskers/mean.py` — CrossModalMeanMasker
 - Image: `pixel_values *= image_binary_mask` (zero-mean normalization → mean fill)
 - Text: replaces `attention_mask` with coalition-derived mask
 - Clones inputs to avoid mutation
@@ -95,7 +95,7 @@ Three dataclasses serve as the universal data protocol:
   1. Infers model type (clip/siglip/siglip2)
   2. Preprocesses once to determine `n_players_text` + `text_total_length`
   3. Creates `PatchSegmenter` (baseline) or raises `NotImplementedError` for accelerators
-  4. Creates `MeanMasker`
+  4. Creates `CrossModalMeanMasker`
   5. Wires `ProcessorOutput` + raw dict + raw image/text into `ImageImputer`
 
 ### `Game/game_huggingface.py` — VisionLanguageGame
@@ -126,7 +126,7 @@ Three dataclasses serve as the universal data protocol:
 - [ ] **`TorchOps`**: Extract PyTorch-specific ops (currently inline) into adapter
 
 ### Low Priority — Model Support
-- [ ] **CNN models**: `SLICSegmenter` + `MeanMasker` baseline (requires model detection heuristic beyond VLM)
+- [ ] **CNN models**: `SLICSegmenter` + `CrossModalMeanMasker` baseline
 - [ ] **OpenAI API models**: `game_openai.py` integration
 
 ### Known Issues

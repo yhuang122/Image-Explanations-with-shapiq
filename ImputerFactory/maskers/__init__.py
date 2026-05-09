@@ -1,2 +1,2 @@
 from .base import BaseMasker
-from .mean import MeanMasker
+from .mean import CrossModalMeanMasker

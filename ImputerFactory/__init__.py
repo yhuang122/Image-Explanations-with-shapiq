@@ -8,11 +8,11 @@ Exports:
     PhysicalMask         — Concrete pixel/token-level mask.
     SpatialLayout        — Player-to-pixel spatial mapping.
     PatchSegmenter       — Rigid-grid segmenter (VLM baseline).
-    MeanMasker           — Mean-value occlusion masker.
+    CrossModalMeanMasker — Cross-modal occlusion for VLMs (image + text).
 """
 
 from .factory import ImageImputerFactory
 from .core.imputer import ImageImputer
 from .data import ProcessorOutput, PhysicalMask, SpatialLayout
 from .segmenters.patch import PatchSegmenter
-from .maskers.mean import MeanMasker
+from .maskers.mean import CrossModalMeanMasker

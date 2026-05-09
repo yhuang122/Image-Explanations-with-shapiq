@@ -4,14 +4,16 @@ from .base import BaseMasker
 from ImputerFactory.data import PhysicalMask, ProcessorOutput
 
 
-class MeanMasker(BaseMasker):
+class CrossModalMeanMasker(BaseMasker):
     """
-    Mean value occlusion: masks pixels by multiplying pixel_values with a
-    binary mask. Since CLIP/SigLIP inputs are normalized (mean ≈ 0),
-    zeroing out pixels is equivalent to filling with the dataset mean.
+    Cross-modal occlusion for Vision-Language Models.
 
-    For text, this masker replaces the attention_mask with the coalition-derived
-    text attention mask.
+    Image: multiplies pixel_values with a binary mask. Since CLIP/SigLIP
+    inputs are normalized (mean ≈ 0), zeroing out pixels is equivalent to
+    filling with the dataset mean.
+
+    Text: replaces attention_mask with the coalition-derived text mask
+    (1 = attend, 0 = ignore).
     """
 
     def apply(
