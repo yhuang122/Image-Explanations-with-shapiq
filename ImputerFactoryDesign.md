@@ -98,7 +98,7 @@ Three dataclasses serve as the universal data protocol:
   4. Creates `MeanMasker`
   5. Wires `ProcessorOutput` + raw dict + raw image/text into `ImageImputer`
 
-### `src/game_huggingface.py` — VisionLanguageGame
+### `Game/game_huggingface.py` — VisionLanguageGame
 - Constructor: `VisionLanguageGame(imputer, batch_size=64, verbose=False)`
 - `n_players_image` / `n_players_text` from imputer layout
 - `inputs` / `processor` properties delegate to imputer (backward compat)
