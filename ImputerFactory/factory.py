@@ -1,46 +1,179 @@
+"""
+ImageImputerFactory — Central assembly line.
+
+Inspects the model, selects optimal defaults, injects accelerators,
+and returns a fully wired ImageImputer ready for Shapley evaluation.
+"""
+
+from typing import Optional, Any
+import torch
+
 from .core.imputer import ImageImputer
+from .data import ProcessorOutput
 from .segmenters.patch import PatchSegmenter
-# from .segmenters.slic import SLICSegmenter
+from .segmenters.base import BaseSegmenter
 from .maskers.mean import MeanMasker
-from .adapters.torch_ops import TorchOps
+from .maskers.base import BaseMasker
+
 
 class ImageImputerFactory:
-    """Factory for assembling the ImageImputer pipeline."""
-    
-    def build(self, model, processor=None, backend="pytorch", accelerator=None):
-        # 1. Select the backend tensor operations
-        if backend == "pytorch":
-            ops = TorchOps()
-        else:
-            raise NotImplementedError(f"Backend {backend} is not supported yet.")
+    """
+    Assembles the ImageImputer pipeline from components.
 
-        # 2. Introspect the model to determine the baseline components
-        model_type = getattr(model.config, "model_type", "").lower()
-        
-        # Currently explicitly focusing on Vision-Language Models (VLMs)
-        if "clip" in model_type or "siglip" in model_type:
-            # Baseline for Vision-Language Models
-            patch_size = model.vision_model.embeddings.patch_size
-            image_size = model.vision_model.embeddings.image_size
-            
-            segmenter = PatchSegmenter(image_size=image_size, patch_size=patch_size, ops=ops)
-            masker = MeanMasker(ops=ops) 
-        else:
-            raise ValueError(f"Currently only Vision-Language Models (e.g., CLIP, SigLIP) are supported. Unsupported model type: {model_type}")
+    Usage:
+        factory = ImageImputerFactory()
+        imputer = factory.build(model, processor, input_image, input_text)
 
-        # 3. Inject Accelerators (if any)
-        if accelerator == "hybrid":
-            # Override baseline with a HybridSegmenter
-            pass
-        elif accelerator == "gradient":
-            # Override baseline with a GradientGuidedSegmenter
-            pass
+    Accelerator options (future):
+        - None        → PatchSegmenter + MeanMasker (baseline for VLMs)
+        - "gradient"  → GradientGuidedSegmenter
+        - "adaptive"  → AdaptiveSegmenter
+        - "hybrid"    → HybridSegmenter
+    """
 
-        # 4. Assemble and return the Imputer container
+    def build(
+        self,
+        model: Any,
+        processor: Any,
+        input_image: Any,
+        input_text: str,
+        accelerator: Optional[str] = None,
+    ) -> ImageImputer:
+        """
+        Build a fully assembled ImageImputer.
+
+        Args:
+            model: HuggingFace VLM (CLIPModel, SiglipModel, etc.).
+            processor: Corresponding HuggingFace processor.
+            input_image: PIL Image or path.
+            input_text: Text string.
+            accelerator: Optional accelerator strategy.
+
+        Returns:
+            Configured ImageImputer ready for forward_1d / forward_crossmodal.
+        """
+        # ── 1. Infer model type ─────────────────────────────────────────
+        model_type = self._infer_model_type(model)
+
+        # ── 2. Extract model dimensions ─────────────────────────────────
+        image_size = model.vision_model.embeddings.image_size
+        patch_size = model.vision_model.embeddings.patch_size
+        n_channels = model.vision_model.embeddings.config.num_channels
+
+        # ── 3. Preprocess once to determine text players ─────────────────
+        inputs_dict = self._preprocess(processor, input_image, input_text, model_type)
+        n_players_text = self._count_text_players(inputs_dict, model_type)
+        text_total_length = inputs_dict["input_ids"].shape[1]  # e.g., 64 for SigLIP
+
+        # ── 4. Select Segmenter ─────────────────────────────────────────
+        segmenter = self._create_segmenter(
+            accelerator=accelerator,
+            image_size=image_size,
+            patch_size=patch_size,
+            n_channels=n_channels,
+            n_players_text=n_players_text,
+            model_type=model_type,
+            text_total_length=text_total_length,
+        )
+
+        # ── 5. Select Masker ────────────────────────────────────────────
+        masker = self._create_masker(accelerator)
+
+        # ── 6. Build the standardized 1-sample inputs ───────────────────
+        inputs_original = ProcessorOutput(
+            pixel_values=inputs_dict["pixel_values"],
+            input_ids=inputs_dict["input_ids"],
+            attention_mask=inputs_dict["attention_mask"],
+            model_type=model_type,
+        )
+
+        # ── 7. Assemble and return ──────────────────────────────────────
         return ImageImputer(
             model=model,
             processor=processor,
             segmenter=segmenter,
             masker=masker,
-            tensor_ops=ops
+            inputs_original=inputs_original,
+            inputs_raw=inputs_dict,
+            input_image=input_image,
+            input_text=input_text,
         )
+
+    # ─── Internal helpers ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _infer_model_type(model) -> str:
+        """Infer model type from model name/config."""
+        name_or_path = getattr(model, "name_or_path", "")
+        if "siglip2" in name_or_path:
+            return "siglip2"
+        elif "siglip" in name_or_path:
+            return "siglip"
+        config_type = getattr(model.config, "model_type", "").lower()
+        if "siglip" in config_type:
+            return "siglip"
+        return "clip"
+
+    @staticmethod
+    def _preprocess(processor, image, text, model_type: str) -> dict:
+        """Run processor once to get the input structure."""
+        kwargs = dict(images=image, text=text, return_tensors="pt")
+        if model_type in ("siglip", "siglip2"):
+            kwargs["padding"] = "max_length"
+            kwargs["max_length"] = 64
+        elif model_type == "clip":
+            kwargs["padding"] = True
+        return processor(**kwargs)
+
+    @staticmethod
+    def _count_text_players(inputs: dict, model_type: str) -> int:
+        """
+        Count valid text tokens (excluding BOS/EOS/padding).
+
+        CLIP: strips 2 tokens (BOS + EOS).
+        SigLIP: counts non-zero input_ids.
+        SigLIP2: counts non-zero input_ids minus 1.
+        """
+        input_ids = inputs["input_ids"][0]  # first sample
+        if model_type == "siglip2":
+            return input_ids.count_nonzero().item() - 1
+        elif model_type == "siglip":
+            return (input_ids != 1).count_nonzero().item()
+        elif model_type == "clip":
+            return input_ids.size(0) - 2
+        return 0
+
+    @staticmethod
+    def _create_segmenter(
+        accelerator: Optional[str],
+        image_size: int,
+        patch_size: int,
+        n_channels: int,
+        n_players_text: int,
+        model_type: str,
+        text_total_length: int,
+    ) -> BaseSegmenter:
+        """Create the appropriate Segmenter based on accelerator selection."""
+        if accelerator in ("gradient", "adaptive", "hybrid"):
+            raise NotImplementedError(
+                f"Accelerator '{accelerator}' is not yet implemented. "
+                f"Use accelerator=None for baseline PatchSegmenter."
+            )
+
+        # Default: PatchSegmenter (baseline for VLMs)
+        return PatchSegmenter(
+            image_size=image_size,
+            patch_size=patch_size,
+            n_channels=n_channels,
+            n_players_text=n_players_text,
+            model_type=model_type,
+            text_total_length=text_total_length,
+        )
+
+    @staticmethod
+    def _create_masker(accelerator: Optional[str]) -> BaseMasker:
+        """Create the appropriate Masker."""
+        # For VLMs, MeanMasker is the default
+        # AttentionMasker would be used for more advanced occlusion
+        return MeanMasker()
+

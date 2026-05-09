@@ -73,11 +73,12 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/explain', config=args) as run:
 
         input_image = d['jpg']
         input_text = d['txt'].split("\n")[df_metadata.loc[i, "best_text_id"].item()]
+        from ImputerFactory import ImageImputerFactory
+        factory = ImageImputerFactory()
+        imputer = factory.build(model, processor, input_image, input_text)
         game = src.game_huggingface.VisionLanguageGame(
-            model, processor, 
-            input_image=input_image,
-            input_text=input_text,
-            batch_size=BATCH_SIZE
+            imputer,
+            batch_size=BATCH_SIZE,
         )
         
         if game.n_players_image == 49:
