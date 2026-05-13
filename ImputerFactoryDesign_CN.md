@@ -678,6 +678,6 @@ A1.1–A1.8（迁移实验）              B2.1 GradientGuidedSegmenter
 
 ### 已知问题（B1 跟踪）
 
-- `forward_crossmodal` 在边缘情况批次上通过 HF processor 重新处理输入（与原始方法相同的轻微开销）
+- **Crossmodal 边缘情况的 processor 调用**：当 `budget_image % batch_size ≠ 0` 或 `budget_text % batch_size ≠ 0` 时，最后一批图像和/或文本的大小不足（例如 `batch_size=64, budget_image=4559, budget_text=115` 时 `img_bs=15, txt_bs=51`）。2 种图像批 × 2 种文本批 = 4 种组合中有 3 种情况下 `img_bs ≠ txt_bs`，此时 `_preprocess_batch()` 必须重新调用 HF processor 创建 batch 维度匹配的输入。原始 `src` 代码有相同行为（在等价分支中直接调用 `processor_function`），因此这不是回归——而是双循环 crossmodal 设计的固有特性。每次 `forward_crossmodal` 的额外调用最多 3 次（每次约 2 ms，可忽略）。
 - `_repeat_inputs` 使用 `.expand().clone()` 复制内存；可用 stride tricks 优化
 - 尚不支持混合精度（AMP）——对更大模型有影响
