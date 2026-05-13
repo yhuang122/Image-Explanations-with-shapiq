@@ -35,6 +35,14 @@
 
 > Team size: 4 engineers + 1 PM. Structured into two specialized squads.
 
+### Task Status Legend
+| Icon | Meaning |
+|---|---|
+| ⬜ Not started | Task not yet begun |
+| 🔄 In progress | Work underway |
+| ✅ Done | Completed and verified |
+| ⬜ Waiting on A | Blocked until Team A provides input |
+
 ### Team Structure
 
 ```
@@ -62,34 +70,34 @@
 
 #### A1. Experiment Migration & Validation
 
-| # | Target | Details | Success Criteria |
-|---|---|---|---|
-| A1.1 | `experiments/faithfulness.py` | Migrate to `Game.game_huggingface` API | Same faithfulness metrics as `src` baseline (±1e-4) |
-| A1.2 | `experiments/insertion_deletion.py` | Migrate to `Game.game_huggingface` API | Same AID curve as `src` baseline |
-| A1.3 | `experiments/insertion_deletion_siglip.py` | Migrate + verify SigLIP support | Correct model type detection, no crash |
-| A1.4 | `experiments/pointing_game_banzhaf.py` | Migrate to `Game` API | Same PGR accuracy |
-| A1.5 | `experiments/pointing_game_shapley.py` | Migrate to `Game` API | Same PGR accuracy |
-| A1.6 | `experiments/pointing_game_crossmodal.py` | Migrate to `Game` API | Same PGR accuracy |
-| A1.7 | `experiments/explain_mscoco.py` | Migrate to `Game` API | Same top-k interaction overlap |
-| A1.8 | `experiments/explain_mscoco_siglip.py` | Migrate + verify SigLIP2 support | SigLIP2 model loads and runs |
+| # | Target | Details | Success Criteria | Status |
+|---|---|---|---|---|
+| A1.1 | `experiments/faithfulness.py` | Migrate to `Game.game_huggingface` API | Same faithfulness metrics as `src` baseline (±1e-4) | ⬜ Not started |
+| A1.2 | `experiments/insertion_deletion.py` | Migrate to `Game.game_huggingface` API | Same AID curve as `src` baseline | ⬜ Not started |
+| A1.3 | `experiments/insertion_deletion_siglip.py` | Migrate + verify SigLIP support | Correct model type detection, no crash | ⬜ Not started |
+| A1.4 | `experiments/pointing_game_banzhaf.py` | Migrate to `Game` API | Same PGR accuracy | ⬜ Not started |
+| A1.5 | `experiments/pointing_game_shapley.py` | Migrate to `Game` API | Same PGR accuracy | ⬜ Not started |
+| A1.6 | `experiments/pointing_game_crossmodal.py` | Migrate to `Game` API | Same PGR accuracy | ⬜ Not started |
+| A1.7 | `experiments/explain_mscoco.py` | Migrate to `Game` API | Same top-k interaction overlap | ⬜ Not started |
+| A1.8 | `experiments/explain_mscoco_siglip.py` | Migrate + verify SigLIP2 support | SigLIP2 model loads and runs | ⬜ Not started |
 
 #### A2. Numerical Equivalence Regression
 
-| # | Task | Details |
-|---|---|---|
-| A2.1 | Build comparison harness | Script that runs same coalitions through `src` Game and `Game` Game, diffing outputs |
-| A2.2 | Snapshot baseline | Save reference outputs from all 8 experiments using `src` path |
-| A2.3 | CI-style gate | Exit code ≠ 0 if any experiment deviates > 1e-4 from baseline |
+| # | Task | Details | Status |
+|---|---|---|---|
+| A2.1 | Build comparison harness | Script that runs same coalitions through `src` Game and `Game` Game, diffing outputs | ⬜ Not started |
+| A2.2 | Snapshot baseline | Save reference outputs from all 8 experiments using `src` path | ⬜ Not started |
+| A2.3 | CI-style gate | Exit code ≠ 0 if any experiment deviates > 1e-4 from baseline | ⬜ Not started |
 
 #### A3. Cross-Model Adoption Tests
 
-| # | Task | Details |
-|---|---|---|
-| A3.1 | CLIP ViT-B/32 | Already validated in `example.ipynb` |
-| A3.2 | CLIP ViT-B/16 | Test with 196 image players (14×14 grid) |
-| A3.3 | CLIP ViT-L/14 | Test with 256 image players (16×16 grid), verify memory usage |
-| A3.4 | SigLIP base-patch16 | Test model_type detection + text masking logic |
-| A3.5 | SigLIP2 so400m | Test model_type detection (`siglip2` path) |
+| # | Task | Details | Status |
+|---|---|---|---|
+| A3.1 | CLIP ViT-B/32 | Already validated in `example.ipynb` | ✅ Done |
+| A3.2 | CLIP ViT-B/16 | Test with 196 image players (14×14 grid) | ⬜ Not started |
+| A3.3 | CLIP ViT-L/14 | Test with 256 image players (16×16 grid), verify memory usage | ⬜ Not started |
+| A3.4 | SigLIP base-patch16 | Test model_type detection + text masking logic | ⬜ Not started |
+| A3.5 | SigLIP2 so400m | Test model_type detection (`siglip2` path) | ⬜ Not started |
 
 #### A4. Feedback Loop to Team B
 
@@ -105,52 +113,52 @@
 
 #### B1. Bug Fix (Responsive — from Team A reports)
 
-| # | Category | Expected Source |
-|---|---|---|
-| B1.1 | Device placement | CPU/CUDA mismatch in edge cases |
-| B1.2 | Crossmodal batch size | txt_bs ≠ img_bs correctness |
-| B1.3 | Model type detection | Borderline model name patterns |
-| B1.4 | Memory / OOM | Large models (ViT-L) with high budget |
+| # | Category | Expected Source | Status |
+|---|---|---|---|
+| B1.1 | Device placement | CPU/CUDA mismatch in edge cases | ⬜ Waiting on A |
+| B1.2 | Crossmodal batch size | txt_bs ≠ img_bs correctness | ⬜ Waiting on A |
+| B1.3 | Model type detection | Borderline model name patterns | ⬜ Waiting on A |
+| B1.4 | Memory / OOM | Large models (ViT-L) with high budget | ⬜ Waiting on A |
 
 #### B2. Accelerator Segmenters
 
-| # | Feature | Details | Priority |
-|---|---|---|---|
-| B2.1 | `GradientGuidedSegmenter` | Extract gradient map → skimage watershed → non-uniform static layout | Medium |
-| B2.2 | `AdaptiveSegmenter` | Coarse grid → score-driven subdivision → feedback loop. Requires `is_stateful=True` protocol between Imputer ↔ Segmenter | Medium |
+| # | Feature | Details | Priority | Status |
+|---|---|---|---|---|
+| B2.1 | `GradientGuidedSegmenter` | Extract gradient map → skimage watershed → non-uniform static layout | Medium | ⬜ Not started |
+| B2.2 | `AdaptiveSegmenter` | Coarse grid → score-driven subdivision → feedback loop. Requires `is_stateful=True` protocol between Imputer ↔ Segmenter | Medium | ⬜ Not started |
 
 #### B3. Masker Extension
 
-| # | Feature | Details |
-|---|---|---|
-| B3.1 | `AttentionMasker` implementation | Hook self-attention, inject -inf mask matrices. Requires PyTorch `register_forward_hook` or HF `output_attentions` override |
+| # | Feature | Details | Status |
+|---|---|---|---|
+| B3.1 | `AttentionMasker` implementation | Hook self-attention, inject -inf mask matrices. Requires PyTorch `register_forward_hook` or HF `output_attentions` override | ⬜ Not started |
 
 #### B4. Backend Adapter Extraction
 
-| # | Feature | Details |
-|---|---|---|
-| B4.1 | `TorchOps` extraction | Move inline PyTorch ops from Imputer/Segmenter into adapter |
-| B4.2 | `JaxOps` skeleton | Interface + stub for JAX-native models |
+| # | Feature | Details | Status |
+|---|---|---|---|
+| B4.1 | `TorchOps` extraction | Move inline PyTorch ops from Imputer/Segmenter into adapter | ⬜ Not started |
+| B4.2 | `JaxOps` skeleton | Interface + stub for JAX-native models | ⬜ Not started |
 
 #### B5. Performance Optimization
 
-| # | Task | Details |
-|---|---|---|
-| B5.1 | `_repeat_inputs` memory | Replace `.expand().clone()` with stride tricks |
-| B5.2 | AMP support | `torch.autocast` for mixed-precision forward passes |
+| # | Task | Details | Status |
+|---|---|---|---|
+| B5.1 | `_repeat_inputs` memory | Replace `.expand().clone()` with stride tricks | ⬜ Not started |
+| B5.2 | AMP support | `torch.autocast` for mixed-precision forward passes | ⬜ Not started |
 
 ---
 
 ### PM — Coordination & Oversight (1 person)
 
-| # | Responsibility |
-|---|---|
-| P1 | Maintain this document as the single source of truth |
-| P2 | Weekly sync: Team A reports blockers → Team B prioritizes fixes |
-| P3 | Triage A4 bug reports, assign severity, track resolution |
-| P4 | Review API decisions (naming, data formats, public surface) |
-| P5 | Sign off on experiment migration checkpoints (A1.1–A1.8) |
-| P6 | Maintain comparison harness (A2.1) as gatekeeper for merges |
+| # | Responsibility | Status |
+|---|---|---|
+| P1 | Maintain this document as the single source of truth | 🔄 Ongoing |
+| P2 | Weekly sync: Team A reports blockers → Team B prioritizes fixes | 🔄 Ongoing |
+| P3 | Triage A4 bug reports, assign severity, track resolution | ⬜ Pending |
+| P4 | Review API decisions (naming, data formats, public surface) | 🔄 Ongoing |
+| P5 | Sign off on experiment migration checkpoints (A1.1–A1.8) | ⬜ Pending |
+| P6 | Maintain comparison harness (A2.1) as gatekeeper for merges | ⬜ Pending |
 
 ---
 
