@@ -13,6 +13,7 @@ import numpy as np
 import torch
 
 from ImputerFactory.data import (
+    ImputerConfig,
     SpatialLayout,
     PhysicalMask,
     ProcessorOutput,
@@ -43,6 +44,7 @@ class ImageImputer:
         processor: Any,
         segmenter: BaseSegmenter,
         masker: BaseMasker,
+        config: ImputerConfig,
         inputs_original: ProcessorOutput,
         inputs_raw: dict = None,  # Raw HF processor output (for backwards compat)
         input_image: Any = None,  # PIL Image (kept for crossmodal edge cases)
@@ -52,6 +54,7 @@ class ImageImputer:
         self.processor = processor
         self.segmenter = segmenter
         self.masker = masker
+        self.config = config
 
         # Preprocessed 1-sample inputs (owned by imputer, shared across calls)
         self.inputs_original = inputs_original
@@ -61,16 +64,13 @@ class ImageImputer:
         self.input_image = input_image
         self.input_text = input_text
 
-        # Inspect model for metadata
-        vision_emb = model.vision_model.embeddings
-        self.image_size = vision_emb.image_size
-        self.patch_size = vision_emb.patch_size
-        self.n_channels = vision_emb.config.num_channels
-        self.grid_size = self.image_size // self.patch_size
-        self.n_players_image = self.grid_size ** 2
-
-        # Determine model type from the model name/config
-        self.model_type = self._infer_model_type(model)
+        # Derived from config (no direct model inspection needed here)
+        self.image_size = config.image_size
+        self.patch_size = config.patch_size
+        self.n_channels = config.n_channels
+        self.grid_size = config.grid_size
+        self.n_players_image = config.n_players_image
+        self.model_type = config.model_type
 
         # Layout from segmenter
         self.layout: SpatialLayout = segmenter.get_layout()
@@ -285,20 +285,6 @@ class ImageImputer:
     def _extract_diagonal(self, outputs) -> torch.Tensor:
         """Extract diagonal from logits_per_image matrix (1D mode)."""
         return torch.diagonal(outputs.logits_per_image).cpu()
-
-    @staticmethod
-    def _infer_model_type(model) -> str:
-        """Infer model type string from model object."""
-        name_or_path = getattr(model, "name_or_path", "")
-        if "siglip2" in name_or_path:
-            return "siglip2"
-        elif "siglip" in name_or_path:
-            return "siglip"
-        # Default fallback
-        config_type = getattr(model.config, "model_type", "")
-        if "siglip" in config_type.lower():
-            return "siglip"
-        return "clip"
 
     def _preprocess_batch(self, img_bs: int, txt_bs: int) -> dict:
         """Reprocess with processor for crossmodal edge cases."""

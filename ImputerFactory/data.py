@@ -10,6 +10,43 @@ from typing import Optional
 import torch
 
 
+# ─── Imputer Configuration ────────────────────────────────────────────────────
+# Produced by: ImageImputerFactory (once during build)
+# Consumed by: Segmenter, Masker, ImageImputer (shared read-only reference)
+
+@dataclass
+class ImputerConfig:
+    """
+    Read-only configuration produced by the Factory during assembly.
+    All components receive this shared object so Segmenter block size
+    and other parameters flow cleanly across the pipeline.
+
+    Attributes:
+        model_type: 'clip', 'siglip', or 'siglip2'.
+        image_size: Height/width of the input image in pixels.
+        patch_size: Edge length of the ViT patch embedding.
+        n_channels: Number of image channels (typically 3).
+        n_players_image: Number of image players (grid_size² for patches).
+        n_players_text: Number of text players (tokens after stripping BOS/EOS).
+        grid_size: Number of patches per side (image_size // patch_size).
+        text_total_length: Total token length expected by the model (e.g., 64).
+        accelerator: Optional accelerator strategy name.
+        segmenter_kwargs: Extra parameters forwarded to the Segmenter
+            (e.g., initial grid, gradient threshold). Factory populates
+            defaults; callers may override before passing to build().
+    """
+    model_type: str
+    image_size: int
+    patch_size: int
+    n_channels: int
+    n_players_image: int
+    n_players_text: int
+    grid_size: int
+    text_total_length: int
+    accelerator: Optional[str] = None
+    segmenter_kwargs: dict = field(default_factory=dict)
+
+
 # ─── Spatial Layout ───────────────────────────────────────────────────────────
 # Produced by: Segmenter (once per image)
 # Consumed by: ImageImputer (to translate coalitions → physical masks)

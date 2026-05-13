@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 from .base import BaseSegmenter
-from ImputerFactory.data import SpatialLayout, PhysicalMask
+from ImputerFactory.data import ImputerConfig, SpatialLayout, PhysicalMask
 
 
 class PatchSegmenter(BaseSegmenter):
@@ -14,34 +14,27 @@ class PatchSegmenter(BaseSegmenter):
     (CLIP, SigLIP) since their vision encoders natively operate on patches.
     """
 
-    def __init__(
-        self,
-        image_size: int,
-        patch_size: int,
-        n_channels: int,
-        n_players_text: int,
-        model_type: str,
-        text_total_length: int = 64,
-    ):
-        self.image_size = image_size
-        self.patch_size = patch_size
-        self.n_channels = n_channels
-        self.n_players_text = n_players_text
-        self.model_type = model_type
-        self.text_total_length = text_total_length
-        self.grid_size = image_size // patch_size
-        self.n_players_image = self.grid_size ** 2
+    def __init__(self, config: ImputerConfig):
+        super().__init__(config)
+        self.image_size = config.image_size
+        self.patch_size = config.patch_size
+        self.n_channels = config.n_channels
+        self.n_players_text = config.n_players_text
+        self.model_type = config.model_type
+        self.text_total_length = config.text_total_length
+        self.grid_size = config.grid_size
+        self.n_players_image = config.n_players_image
 
         # Pre-compute the layout
         self._layout = SpatialLayout(
             n_players_image=self.n_players_image,
-            n_players_text=n_players_text,
-            image_size=image_size,
-            patch_size=patch_size,
+            n_players_text=self.n_players_text,
+            image_size=self.image_size,
+            patch_size=self.patch_size,
             grid_size=self.grid_size,
-            n_channels=n_channels,
-            model_type=model_type,
-            text_total_length=text_total_length,
+            n_channels=self.n_channels,
+            model_type=self.model_type,
+            text_total_length=self.text_total_length,
             is_stateful=False,
         )
 

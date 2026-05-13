@@ -6,7 +6,8 @@
 
 | 模块 | 组件 | 状态 | 备注 |
 |---|---|---|---|
-| **数据类型** | `SpatialLayout` | ✅ 完成 | Player↔像素/token 映射元数据 |
+| **数据类型** | `ImputerConfig` | ✅ 完成 | 共享只读配置：模型元数据 + 加速器 + segmenter_kwargs |
+| | `SpatialLayout` | ✅ 完成 | Player↔像素/token 映射元数据 |
 | | `PhysicalMask` | ✅ 完成 | 具体掩码：`image_binary_mask` (N,C,H,W) + `text_attention_mask` (N,L) |
 | | `ProcessorOutput` | ✅ 完成 | 标准化 HuggingFace 输入封装 |
 | **Segmenter** | `BaseSegmenter` | ✅ 完成 | 抽象接口：`get_layout()` + `generate_masks()` |
@@ -93,6 +94,7 @@
 ### 数据类型（位于 `ImputerFactory/data.py`）
 **唯一职责**：通用数据协议 — 定义模块间传递对象的形状和语义。
 
+- `ImputerConfig`：共享只读配置（由 Factory 生产，所有模块消费）。包含模型元数据、加速器选择和用于可变块大小的 `segmenter_kwargs`。
 - `SpatialLayout`：不可变元数据（由 Segmenter 生产，由 Imputer 消费）
 - `PhysicalMask`：具体张量掩码（由 Segmenter/imputer 转换生产，由 Masker 消费）
 - `ProcessorOutput`：标准化模型输入（由 Factory 生产，由 Masker 和 Imputer 消费）
@@ -103,6 +105,7 @@
 |---|---|
 | 只有 Imputer 可以触碰 `model` | 防止分散的 `model(**inputs)` 调用 |
 | 只有 Imputer 拥有 `processor` 和原始 `input_image`/`input_text` | 预处理的唯一数据源 |
+| `ImputerConfig` 在 Factory 创建后为只读 | 确保所有组件共享一致的模型元数据视图 |
 | Segmenter 绝不在 `generate_masks` 内访问 GPU | "CPU 规划，GPU 执行"：掩码一次性生成，批量应用 |
 | Masker 修改前克隆输入 | 防止跨批次迭代的变异 bug |
 | Game 绝不导入 `torch` | 保持适配器纯净；所有张量操作在 ImputerFactory 中 |
@@ -183,18 +186,23 @@ factory.build(model, processor, input_image, input_text)
 │     └─ CLIP: input_ids.size(1) - 2 = 10 - 2 = 8
 │     └─ n_players_text = 8, text_total_length = 10
 │
-├─ 5. _create_segmenter(...)
-│     └─ PatchSegmenter(image_size=224, patch_size=32, n_channels=3,
-│                       n_players_text=8, model_type="clip", text_total_length=10)
-│     └─ grid_size = 7, n_players_image = 7² = 49
+├─ 5. 构建 ImputerConfig
+│     └─ ImputerConfig(model_type="clip", image_size=224, patch_size=32,
+│         n_channels=3, n_players_image=49, n_players_text=8,
+│         grid_size=7, text_total_length=10, accelerator=None,
+│         segmenter_kwargs={})
+│
+├─ 6. _create_segmenter(config)
+│     └─ PatchSegmenter(config)  ← 接收共享 config
 │     └─ 生成 SpatialLayout(n_players_image=49, n_players_text=8, ...)
 │
-├─ 6. _create_masker(...)
+├─ 7. _create_masker(...)
 │     └─ CrossModalMeanMasker()
 │
-├─ 7. 构建 ProcessorOutput + 装配 ImageImputer
+├─ 8. 构建 ProcessorOutput + 装配 ImageImputer
 │     └─ inputs_original: ProcessorOutput(pixel_values, input_ids, attention_mask)
 │     └─ inputs_raw: 原始 HF dict（保留 .tokens() 等方法）
+│     └─ config 传递给 ImageImputer  ← 所有组件共享
 │     └─ input_image、input_text 保存在 imputer 上（用于 crossmodal 边缘情况）
 │
 └─ 返回: ImageImputer(model, processor, segmenter, masker, inputs_original, ...)
@@ -451,21 +459,26 @@ src.plot.plot_image_and_text_together(
 
 1. **"CPU 规划，GPU 执行"**：Segmenter 在 CPU 上一次性生成整数索引映射。成千上万次 coalition→mask 转换完全在 GPU 上通过原生张量操作完成。
 
-2. **Imputer 拥有输入**：`ImageImputer` 存储 `inputs_original`（ProcessorOutput）、`inputs_raw`（HF dict，用于 `.tokens()`）以及 `input_image`/`input_text`（用于 crossmodal 批量大小不一致的边缘情况）。
+2. **ImputerConfig 作为共享事实**：`ImputerConfig` 由 Factory 一次性创建，在 Segmenter、Masker 和 Imputer 之间只读共享。消除了分散的模型内省。`segmenter_kwargs` 携带可变块大小参数从 Factory → Segmenter。
 
-3. **Game 是薄外壳**：`VisionLanguageGame` 将所有掩码/批处理/模型前向传播委托给 Imputer。它只处理 shapiq 调度（归一化值、玩家计数）。
+3. **Imputer 拥有输入**：`ImageImputer` 存储 `inputs_original`（ProcessorOutput）、`inputs_raw`（HF dict，用于 `.tokens()`）以及 `input_image`/`input_text`（用于 crossmodal 批量大小不一致的边缘情况）。
+
+4. **Game 是薄外壳**：`VisionLanguageGame` 将所有掩码/批处理/模型前向传播委托给 Imputer。它只处理 shapiq 调度（归一化值、玩家计数）。
 
 ---
 
 ## 当前实现细节
 
 ### `ImputerFactory/data.py`
-三个 dataclass 作为通用数据协议：
+四个 dataclass 作为通用数据协议：
+- **`ImputerConfig`**：由 Factory 生产的只读配置。包含 `model_type`、`image_size`、`patch_size`、`n_channels`、`n_players_image`、`n_players_text`、`grid_size`、`text_total_length`、`accelerator` 和 `segmenter_kwargs`（传递给 Segmenter 用于可变块大小）。所有组件共享。
 - **`SpatialLayout`**：描述空间划分的不可变元数据。由 Segmenter 一次性生产，由 Imputer 消费。
 - **`PhysicalMask`**：具体张量掩码。`image_binary_mask` (N, C, H, W) float + `text_attention_mask` (N, L) int。
 - **`ProcessorOutput`**：封装 `pixel_values`、`input_ids`、`attention_mask`，提供 `to_dict()` 用于模型前向传播。
 
 ### `ImputerFactory/segmenters/patch.py` — PatchSegmenter
+- 构造函数：`PatchSegmenter(config: ImputerConfig)` — 接收共享配置
+- 所有模型元数据（image_size、patch_size 等）从 `config` 读取，不直接访问模型
 - 初始化时预计算 `SpatialLayout`（is_stateful=False）
 - `generate_masks()` 将 coalition 数组转换为 `PhysicalMask`
 - 图像：将 patch 级布尔值展开为 `patch_size×patch_size` 块 → (N, C, H, W)
@@ -477,18 +490,21 @@ src.plot.plot_image_and_text_together(
 - 克隆输入以避免变异
 
 ### `ImputerFactory/core/imputer.py` — ImageImputer
+- 构造函数：接收 `config: ImputerConfig` — 模型元数据从 config 派生，而非直接从 `model` 获取
 - **`forward_1d(coalitions, batch_size)`**：拆分 coalition → 生成掩码 → 分批 → 掩码 → 模型 → 提取对角线
 - **`forward_crossmodal(coalitions_img, coalitions_txt, batch_size)`**：双循环（图像外层，文本内层）。边缘情况：当 txt_bs ≠ img_bs 时，使用存储的 `input_image`/`input_text` 通过 `_preprocess_batch()` 重新处理
 - **`_model_forward()`**：自动检测模型设备，前向传播前移动输入
-- 存储：`inputs_original`、`inputs_raw`、`input_image`、`input_text`、`model`、`processor`、`segmenter`、`masker`、`layout`
+- 存储：`config`、`inputs_original`、`inputs_raw`、`input_image`、`input_text`、`model`、`processor`、`segmenter`、`masker`、`layout`
 
 ### `ImputerFactory/factory.py` — ImageImputerFactory
 - `build(model, processor, input_image, input_text, accelerator=None)`：
   1. 推断模型类型（clip/siglip/siglip2）
-  2. 一次性预处理以确定 `n_players_text` + `text_total_length`
-  3. 创建 `PatchSegmenter`（基线）或对加速器抛出 `NotImplementedError`
-  4. 创建 `CrossModalMeanMasker`
-  5. 将 `ProcessorOutput` + 原始 dict + 原始图像/文本注入 `ImageImputer`
+  2. 提取模型维度并计算派生值（grid_size、n_players_image）
+  3. 一次性预处理以确定 `n_players_text` + `text_total_length`
+  4. **构建 `ImputerConfig`** — 所有元数据、加速器选择和 `segmenter_kwargs` 的唯一数据源
+  5. 通过 `_create_segmenter(config)` 创建 segmenter — config 流入 Segmenter
+  6. 创建 `CrossModalMeanMasker`
+  7. 将 `ProcessorOutput` + 原始 dict + config + 原始图像/文本注入 `ImageImputer`
 
 ### `Game/game_huggingface.py` — VisionLanguageGame
 - 构造函数：`VisionLanguageGame(imputer, batch_size=64, verbose=False)`

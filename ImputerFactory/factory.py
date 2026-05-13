@@ -6,10 +6,9 @@ and returns a fully wired ImageImputer ready for Shapley evaluation.
 """
 
 from typing import Optional, Any
-import torch
 
 from .core.imputer import ImageImputer
-from .data import ProcessorOutput
+from .data import ImputerConfig, ProcessorOutput
 from .segmenters.patch import PatchSegmenter
 from .segmenters.base import BaseSegmenter
 from .maskers.mean import CrossModalMeanMasker
@@ -59,27 +58,35 @@ class ImageImputerFactory:
         image_size = model.vision_model.embeddings.image_size
         patch_size = model.vision_model.embeddings.patch_size
         n_channels = model.vision_model.embeddings.config.num_channels
+        grid_size = image_size // patch_size
+        n_players_image = grid_size ** 2
 
         # ── 3. Preprocess once to determine text players ─────────────────
         inputs_dict = self._preprocess(processor, input_image, input_text, model_type)
         n_players_text = self._count_text_players(inputs_dict, model_type)
-        text_total_length = inputs_dict["input_ids"].shape[1]  # e.g., 64 for SigLIP
+        text_total_length = inputs_dict["input_ids"].shape[1]
 
-        # ── 4. Select Segmenter ─────────────────────────────────────────
-        segmenter = self._create_segmenter(
-            accelerator=accelerator,
+        # ── 4. Build shared config ──────────────────────────────────────
+        config = ImputerConfig(
+            model_type=model_type,
             image_size=image_size,
             patch_size=patch_size,
             n_channels=n_channels,
+            n_players_image=n_players_image,
             n_players_text=n_players_text,
-            model_type=model_type,
+            grid_size=grid_size,
             text_total_length=text_total_length,
+            accelerator=accelerator,
+            segmenter_kwargs={},  # populated by accelerators in future
         )
 
-        # ── 5. Select Masker ────────────────────────────────────────────
+        # ── 5. Select Segmenter (receives config) ───────────────────────
+        segmenter = self._create_segmenter(config)
+
+        # ── 6. Select Masker ────────────────────────────────────────────
         masker = self._create_masker(accelerator)
 
-        # ── 6. Build the standardized 1-sample inputs ───────────────────
+        # ── 7. Build the standardized 1-sample inputs ───────────────────
         inputs_original = ProcessorOutput(
             pixel_values=inputs_dict["pixel_values"],
             input_ids=inputs_dict["input_ids"],
@@ -87,12 +94,13 @@ class ImageImputerFactory:
             model_type=model_type,
         )
 
-        # ── 7. Assemble and return ──────────────────────────────────────
+        # ── 8. Assemble and return ──────────────────────────────────────
         return ImageImputer(
             model=model,
             processor=processor,
             segmenter=segmenter,
             masker=masker,
+            config=config,
             inputs_original=inputs_original,
             inputs_raw=inputs_dict,
             input_image=input_image,
@@ -144,31 +152,16 @@ class ImageImputerFactory:
         return 0
 
     @staticmethod
-    def _create_segmenter(
-        accelerator: Optional[str],
-        image_size: int,
-        patch_size: int,
-        n_channels: int,
-        n_players_text: int,
-        model_type: str,
-        text_total_length: int,
-    ) -> BaseSegmenter:
-        """Create the appropriate Segmenter based on accelerator selection."""
-        if accelerator in ("gradient", "adaptive", "hybrid"):
+    def _create_segmenter(config: ImputerConfig) -> BaseSegmenter:
+        """Create the appropriate Segmenter based on the shared config."""
+        if config.accelerator in ("gradient", "adaptive", "hybrid"):
             raise NotImplementedError(
-                f"Accelerator '{accelerator}' is not yet implemented. "
+                f"Accelerator '{config.accelerator}' is not yet implemented. "
                 f"Use accelerator=None for baseline PatchSegmenter."
             )
 
         # Default: PatchSegmenter (baseline for VLMs)
-        return PatchSegmenter(
-            image_size=image_size,
-            patch_size=patch_size,
-            n_channels=n_channels,
-            n_players_text=n_players_text,
-            model_type=model_type,
-            text_total_length=text_total_length,
-        )
+        return PatchSegmenter(config=config)
 
     @staticmethod
     def _create_masker(accelerator: Optional[str]) -> BaseMasker:
