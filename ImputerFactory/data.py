@@ -34,6 +34,10 @@ class ImputerConfig:
         segmenter_kwargs: Extra parameters forwarded to the Segmenter
             (e.g., initial grid, gradient threshold). Factory populates
             defaults; callers may override before passing to build().
+        use_amp: If True, run model forward under torch.autocast(fp16).
+            Only takes effect when the model is on a CUDA device.
+            Off by default — SigLIP's sigmoid head is fp16-sensitive,
+            so callers opt in explicitly (e.g. for ViT-L/14).
     """
     model_type: str
     image_size: int
@@ -45,6 +49,7 @@ class ImputerConfig:
     text_total_length: int
     accelerator: Optional[str] = None
     segmenter_kwargs: dict = field(default_factory=dict)
+    use_amp: bool = False
 
 
 # ─── Spatial Layout ───────────────────────────────────────────────────────────

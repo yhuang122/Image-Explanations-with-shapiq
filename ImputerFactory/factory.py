@@ -37,6 +37,7 @@ class ImageImputerFactory:
         input_image: Any,
         input_text: str,
         accelerator: Optional[str] = None,
+        use_amp: bool = False,
     ) -> ImageImputer:
         """
         Build a fully assembled ImageImputer.
@@ -47,6 +48,8 @@ class ImageImputerFactory:
             input_image: PIL Image or path.
             input_text: Text string.
             accelerator: Optional accelerator strategy.
+            use_amp: If True, model.forward runs under torch.autocast(fp16)
+                on CUDA. Useful for ViT-L/14 with large coalitions.
 
         Returns:
             Configured ImageImputer ready for forward_1d / forward_crossmodal.
@@ -78,6 +81,7 @@ class ImageImputerFactory:
             text_total_length=text_total_length,
             accelerator=accelerator,
             segmenter_kwargs={},  # populated by accelerators in future
+            use_amp=use_amp,
         )
 
         # ── 5. Select Segmenter (receives config) ───────────────────────

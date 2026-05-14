@@ -246,11 +246,19 @@ class ImageImputer:
     # ─── Internal helpers ─────────────────────────────────────────────────
 
     def _repeat_inputs(self, inputs: ProcessorOutput, batch_size: int) -> ProcessorOutput:
-        """Repeat a 1-sample ProcessorOutput to the desired batch size."""
+        """Broadcast a 1-sample ProcessorOutput to batch_size as stride-0 views.
+
+        Storage is shared with the original tensors — no per-sample copy.
+        The downstream Masker materializes pixel_values via multiplication
+        (out-of-place, allocates the real (N,C,H,W) tensor once) and
+        replaces attention_mask with the real (N,L) text mask. input_ids
+        stays as a stride-0 view; nn.Embedding's index_select reads
+        non-contiguous indices fine.
+        """
         return ProcessorOutput(
-            pixel_values=inputs.pixel_values.expand(batch_size, -1, -1, -1).clone(),
-            input_ids=inputs.input_ids.expand(batch_size, -1).clone(),
-            attention_mask=inputs.attention_mask.expand(batch_size, -1).clone(),
+            pixel_values=inputs.pixel_values.expand(batch_size, -1, -1, -1),
+            input_ids=inputs.input_ids.expand(batch_size, -1),
+            attention_mask=inputs.attention_mask.expand(batch_size, -1),
             model_type=inputs.model_type,
         )
 
@@ -278,8 +286,14 @@ class ImageImputer:
     def _model_forward(self, inputs: ProcessorOutput):
         """Run model forward pass. Returns raw model outputs."""
         device = next(self.model.parameters()).device
+        inputs_dict = {k: v.to(device) for k, v in inputs.to_dict().items()}
+        use_amp = self.config.use_amp and device.type == "cuda"
         with torch.no_grad():
-            outputs = self.model(**{k: v.to(device) for k, v in inputs.to_dict().items()})
+            if use_amp:
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    outputs = self.model(**inputs_dict)
+            else:
+                outputs = self.model(**inputs_dict)
         return outputs
 
     def _extract_diagonal(self, outputs) -> torch.Tensor:

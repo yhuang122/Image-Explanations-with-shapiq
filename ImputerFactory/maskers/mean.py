@@ -21,21 +21,24 @@ class CrossModalMeanMasker(BaseMasker):
         processor_output: ProcessorOutput,
         physical_mask: PhysicalMask,
     ) -> ProcessorOutput:
-        # Shallow copy the container, then replace tensors
-        masked = ProcessorOutput(
-            pixel_values=processor_output.pixel_values.clone(),
-            input_ids=processor_output.input_ids.clone(),
-            attention_mask=processor_output.attention_mask.clone(),
+        # No defensive clones: `*` is out-of-place (creates a new tensor)
+        # and attention_mask is replaced by rebinding the reference.
+        # Originals are never mutated, so the "clone before mutate" contract
+        # is satisfied without paying the (N,C,H,W) allocation up-front.
+        pixel_values = processor_output.pixel_values
+        input_ids = processor_output.input_ids
+        attention_mask = processor_output.attention_mask
+
+        if physical_mask.image_binary_mask is not None:
+            pixel_values = pixel_values * \
+                physical_mask.image_binary_mask.to(pixel_values.device)
+
+        if physical_mask.text_attention_mask is not None:
+            attention_mask = physical_mask.text_attention_mask.to(attention_mask.device)
+
+        return ProcessorOutput(
+            pixel_values=pixel_values,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
             model_type=processor_output.model_type,
         )
-
-        # Image: multiply pixel values by binary mask
-        if physical_mask.image_binary_mask is not None:
-            masked.pixel_values = masked.pixel_values * \
-                physical_mask.image_binary_mask.to(masked.device)
-
-        # Text: replace attention mask
-        if physical_mask.text_attention_mask is not None:
-            masked.attention_mask = physical_mask.text_attention_mask.to(masked.device)
-
-        return masked
