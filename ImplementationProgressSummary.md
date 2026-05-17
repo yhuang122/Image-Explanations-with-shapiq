@@ -72,14 +72,18 @@
 
 | # | Target | Details | Success Criteria | Status |
 |---|---|---|---|---|
-| A1.1 | `experiments/faithfulness.py` | Migrate to `Game.game_huggingface` API | Same faithfulness metrics as `src` baseline (±1e-4) | ⬜ Not started |
-| A1.2 | `experiments/insertion_deletion.py` | Migrate to `Game.game_huggingface` API | Same AID curve as `src` baseline | ⬜ Not started |
+| A1.1 | `experiments/faithfulness.py` | Migrate to `Game.game_huggingface` API | Same faithfulness metrics as `src` baseline (±1e-4) | ✅ Done |
+| A1.2 | `experiments/insertion_deletion.py` | Migrate to `Game.game_huggingface` API | Same AID curve as `src` baseline | ✅ Done |
 | A1.3 | `experiments/insertion_deletion_siglip.py` | Migrate + verify SigLIP support | Correct model type detection, no crash | ⬜ Not started |
 | A1.4 | `experiments/pointing_game_banzhaf.py` | Migrate to `Game` API | Same PGR accuracy | ⬜ Not started |
-| A1.5 | `experiments/pointing_game_shapley.py` | Migrate to `Game` API | Same PGR accuracy | ⬜ Not started |
-| A1.6 | `experiments/pointing_game_crossmodal.py` | Migrate to `Game` API | Same PGR accuracy | ⬜ Not started |
+| A1.5 | `experiments/pointing_game_shapley.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
+| A1.6 | `experiments/pointing_game_crossmodal.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
 | A1.7 | `experiments/explain_mscoco.py` | Migrate to `Game` API | Same top-k interaction overlap | ⬜ Not started |
 | A1.8 | `experiments/explain_mscoco_siglip.py` | Migrate + verify SigLIP2 support | SigLIP2 model loads and runs | ⬜ Not started |
+
+> **Notes:**
+> - **A1.1** (`migrated/faithfulness.py`): HuggingFace model hardcoded to device 0 and OpenAI CLIP to device 1 (was the same logic in the inital pipelien) — two models run simultaneously on different GPUs to avoid OOM. When file moved back to experiements/ change PROJECT_ROOT reference from parent[2] to parent[1].
+> - **A1.2** (`migrated/insertion_deletion.py`): When file moved back to experiements/ change PROJECT_ROOT reference from parent[2] to parent[1].
 
 #### A2. Numerical Equivalence Regression
 
