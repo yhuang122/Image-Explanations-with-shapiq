@@ -148,8 +148,8 @@
 
 | # | Task | Details | Status |
 |---|---|---|---|
-| B5.1 | `_repeat_inputs` memory | Replace `.expand().clone()` with stride tricks | ⬜ Not started |
-| B5.2 | AMP support | `torch.autocast` for mixed-precision forward passes | ⬜ Not started |
+| B5.1 | `_repeat_inputs` memory | Replace `.expand().clone()` with stride tricks |✅ Done (Needs profiling validation)
+| B5.2 | AMP support | `torch.autocast` for mixed-precision forward passes | ✅ Done (Opt-in, needs numeric validation)
 
 ---
 
@@ -207,5 +207,5 @@ A1.1–A1.8 (migrate experiments)    B2.1 GradientGuidedSegmenter
 ### Known Issues (tracked for B1)
 
 - **Crossmodal edge-case processor calls**: When `budget_image % batch_size ≠ 0` or `budget_text % batch_size ≠ 0`, the last image and/or text batch have incomplete sizes (e.g., `img_bs=15, txt_bs=51` for `batch_size=64, budget_image=4559, budget_text=115`). The 2 (img batches) × 2 (text batches) = 4 combinations yield 3 cases where `img_bs ≠ txt_bs`. In those cases `_preprocess_batch()` must re-invoke the HF processor to create inputs with matching batch dimensions. The original `src` code has the same behavior (it calls `processor_function` directly in the equivalent branches), so this is not a regression — it is inherent to the double-loop crossmodal design. Total extra calls per `forward_crossmodal`: at most 3 (~2 ms each, negligible).
-- `_repeat_inputs` uses `.expand().clone()` which duplicates memory; could be optimized with stride tricks
-- No mixed-precision (AMP) support yet — relevant for larger models
+- `_repeat_inputs` uses `.expand().clone()` which duplicates memory; could be optimized with stride tricks| ✅ Done (Needs profiling validation)
+- No mixed-precision (AMP) support yet — relevant for larger models| ✅ Done (Opt-in, needs numeric validation)
