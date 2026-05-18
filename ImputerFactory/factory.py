@@ -116,13 +116,20 @@ class ImageImputerFactory:
     @staticmethod
     def _infer_model_type(model) -> str:
         """Infer model type from model name/config."""
-        name_or_path = getattr(model, "name_or_path", "")
-        if "siglip2" in name_or_path:
+        config = getattr(model, "config", None)
+        candidates = [
+            getattr(model, "name_or_path", ""),
+            getattr(config, "_name_or_path", ""),
+            getattr(config, "name_or_path", ""),
+            getattr(config, "model_type", ""),
+            type(model).__name__,
+            type(config).__name__ if config is not None else "",
+        ]
+        normalized = [str(value).lower() for value in candidates if value]
+
+        if any("siglip2" in value for value in normalized):
             return "siglip2"
-        elif "siglip" in name_or_path:
-            return "siglip"
-        config_type = getattr(model.config, "model_type", "").lower()
-        if "siglip" in config_type:
+        elif any("siglip" in value for value in normalized):
             return "siglip"
         return "clip"
 
