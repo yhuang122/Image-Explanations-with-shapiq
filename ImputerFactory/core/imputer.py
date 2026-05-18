@@ -246,19 +246,17 @@ class ImageImputer:
     # ─── Internal helpers ─────────────────────────────────────────────────
 
     def _repeat_inputs(self, inputs: ProcessorOutput, batch_size: int) -> ProcessorOutput:
-        """Broadcast a 1-sample ProcessorOutput to batch_size as stride-0 views.
+        """Broadcast a 1-sample ProcessorOutput to batch_size.
 
-        Storage is shared with the original tensors — no per-sample copy.
-        The downstream Masker materializes pixel_values via multiplication
-        (out-of-place, allocates the real (N,C,H,W) tensor once) and
-        replaces attention_mask with the real (N,L) text mask. input_ids
-        stays as a stride-0 view; nn.Embedding's index_select reads
-        non-contiguous indices fine.
+        Keep pixel_values as a stride-0 view because it is the large tensor
+        and the Masker materializes it once via out-of-place multiplication.
+        Materialize text tensors; they are small, and some model internals may
+        assume token tensors are contiguous.
         """
         return ProcessorOutput(
             pixel_values=inputs.pixel_values.expand(batch_size, -1, -1, -1),
-            input_ids=inputs.input_ids.expand(batch_size, -1),
-            attention_mask=inputs.attention_mask.expand(batch_size, -1),
+            input_ids=inputs.input_ids.expand(batch_size, -1).clone(),
+            attention_mask=inputs.attention_mask.expand(batch_size, -1).clone(),
             model_type=inputs.model_type,
         )
 
