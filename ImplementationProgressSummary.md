@@ -128,7 +128,7 @@
 
 | # | Feature | Details | Priority | Status |
 |---|---|---|---|---|
-| B2.1 | `GradientGuidedSegmenter` | Extract gradient map → skimage watershed → non-uniform static layout | Medium | ⬜ Not started |
+| B2.1 | `GradientGuidedSegmenter` | Extract gradient map → skimage watershed → non-uniform static layout | Medium | 🔄 In progress |
 | B2.2 | `AdaptiveSegmenter` | Coarse grid → score-driven subdivision → feedback loop. Requires `is_stateful=True` protocol between Imputer ↔ Segmenter | Medium | ⬜ Not started |
 
 #### B3. Masker Extension
