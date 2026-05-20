@@ -4,7 +4,7 @@ ImageImputerFactory — Modular, framework-agnostic image imputation pipeline.
 Exports:
     ImageImputerFactory       — Central assembly line.
     ImageImputer              — Core orchestration engine.
-    ImputerConfig             — Shared configuration (model metadata + accelerator).
+    ImputerConfig             — Shared configuration (model metadata + segmenter + masker).
     ProcessorOutput           — Standardized model input format.
     PhysicalMask              — Concrete pixel/token-level mask.
     SpatialLayout             — Player-to-pixel spatial mapping.

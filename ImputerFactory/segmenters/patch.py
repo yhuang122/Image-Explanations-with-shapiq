@@ -3,9 +3,11 @@ import numpy as np
 import torch
 
 from .base import BaseSegmenter
+from . import register_segmenter
 from ImputerFactory.data import ImputerConfig, SpatialLayout, PhysicalMask
 
 
+@register_segmenter("patch")
 class PatchSegmenter(BaseSegmenter):
     """
     Rigid-grid segmenter aligned with Vision Transformer patch embeddings.

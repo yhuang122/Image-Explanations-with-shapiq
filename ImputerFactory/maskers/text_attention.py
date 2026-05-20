@@ -8,9 +8,11 @@ Designed to serve text-only models or be composed into cross-modal pipelines.
 import torch
 
 from .base import BaseMasker
+from . import register_masker
 from ImputerFactory.data import PhysicalMask, ProcessorOutput
 
 
+@register_masker("text")
 class TextAttentionMasker(BaseMasker):
     """
     Pure text occlusion via attention_mask replacement.

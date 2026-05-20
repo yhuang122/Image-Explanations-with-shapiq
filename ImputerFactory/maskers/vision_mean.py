@@ -9,9 +9,11 @@ attention_mask. Designed to serve PatchSegmenter (ViT), SLICSegmenter
 import torch
 
 from .base import BaseMasker
+from . import register_masker
 from ImputerFactory.data import PhysicalMask, ProcessorOutput
 
 
+@register_masker("vision")
 class VisionMeanMasker(BaseMasker):
     """
     Pure image occlusion via multiplicative binary mask.

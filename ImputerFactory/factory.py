@@ -1,7 +1,7 @@
 """
 ImageImputerFactory — Central assembly line.
 
-Inspects the model, selects optimal defaults, injects accelerators,
+Inspects the model, selects optimal defaults, injects segmenters,
 and returns a fully wired ImageImputer ready for Shapley evaluation.
 """
 
@@ -9,10 +9,10 @@ from typing import Optional, Any
 
 from .core.imputer import ImageImputer
 from .data import ImputerConfig, ProcessorOutput
-from .segmenters.patch import PatchSegmenter
 from .segmenters.base import BaseSegmenter
-from .maskers.crossmodal_composite import CrossModalCompositeMasker
+from .segmenters import get_segmenter
 from .maskers.base import BaseMasker
+from .maskers import get_masker
 
 
 class ImageImputerFactory:
@@ -23,10 +23,14 @@ class ImageImputerFactory:
         factory = ImageImputerFactory()
         imputer = factory.build(model, processor, input_image, input_text)
 
-    Accelerator options (future):
-        - None        → PatchSegmenter + CrossModalCompositeMasker (baseline for VLMs)
-        - "gradient"  → GradientGuidedSegmenter
-        - "adaptive"  → AdaptiveSegmenter
+    Segmenter options:
+        - None / "patch" → PatchSegmenter (baseline for VLMs)
+        - "slic"         → SLICSegmenter (perceptual superpixels)
+
+    Masker options:
+        - None / "crossmodal_mean" → CrossModalMeanMasker (baseline for VLMs)
+        - "vision"           → VisionMeanMasker (image-only)
+        - "text"             → TextAttentionMasker (text-only)
     """
 
     def build(
@@ -35,7 +39,8 @@ class ImageImputerFactory:
         processor: Any,
         input_image: Any,
         input_text: str,
-        accelerator: Optional[str] = None,
+        segmenter: Optional[str] = None,
+        masker: Optional[str] = None,
         use_amp: bool = False,
     ) -> ImageImputer:
         """
@@ -46,7 +51,8 @@ class ImageImputerFactory:
             processor: Corresponding HuggingFace processor.
             input_image: PIL Image or path.
             input_text: Text string.
-            accelerator: Optional accelerator strategy.
+            segmenter: Optional segmenter strategy ("patch", "slic").
+            masker: Optional masker strategy ("crossmodal_mean", "vision", "text").
             use_amp: If True, model.forward runs under torch.autocast(fp16)
                 on CUDA. Useful for ViT-L/14 with large coalitions.
 
@@ -78,16 +84,21 @@ class ImageImputerFactory:
             n_players_text=n_players_text,
             grid_size=grid_size,
             text_total_length=text_total_length,
-            accelerator=accelerator,
-            segmenter_kwargs={},  # populated by accelerators in future
+            segmenter=segmenter,
+            masker=masker,
+            segmenter_kwargs={},  # populated by segmenter strategies in future
             use_amp=use_amp,
         )
 
-        # ── 5. Select Segmenter (receives config) ───────────────────────
+        # ── 5. Select Segmenter (default: "patch") ──────────────────────
+        if config.segmenter is None:
+            config.segmenter = "patch"
         segmenter = self._create_segmenter(config)
 
-        # ── 6. Select Masker ────────────────────────────────────────────
-        masker = self._create_masker(accelerator)
+        # ── 6. Select Masker (default: "crossmodal_mean") ────────────────────
+        if config.masker is None:
+            config.masker = "crossmodal_mean"
+        masker = self._create_masker(config)
 
         # ── 7. Build the standardized 1-sample inputs ───────────────────
         inputs_original = ProcessorOutput(
@@ -163,20 +174,13 @@ class ImageImputerFactory:
 
     @staticmethod
     def _create_segmenter(config: ImputerConfig) -> BaseSegmenter:
-        """Create the appropriate Segmenter based on the shared config."""
-        if config.accelerator in ("gradient", "adaptive", "hybrid"):
-            raise NotImplementedError(
-                f"Accelerator '{config.accelerator}' is not yet implemented. "
-                f"Use accelerator=None for baseline PatchSegmenter."
-            )
-
-        # Default: PatchSegmenter (baseline for VLMs)
-        return PatchSegmenter(config=config)
+        """Look up and instantiate the Segmenter via registry."""
+        cls = get_segmenter(config.segmenter)
+        return cls(config=config)
 
     @staticmethod
-    def _create_masker(accelerator: Optional[str]) -> BaseMasker:
-        """Create the appropriate Masker."""
-        # For VLMs, CrossModalCompositeMasker is the default.
-        # It delegates to VisionMeanMasker + TextAttentionMasker internally.
-        return CrossModalCompositeMasker()
+    def _create_masker(config: ImputerConfig) -> BaseMasker:
+        """Look up and instantiate the Masker via registry."""
+        cls = get_masker(config.masker)
+        return cls()
 

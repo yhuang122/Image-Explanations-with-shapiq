@@ -30,9 +30,10 @@ class ImputerConfig:
         n_players_text: Number of text players (tokens after stripping BOS/EOS).
         grid_size: Number of patches per side (image_size // patch_size).
         text_total_length: Total token length expected by the model (e.g., 64).
-        accelerator: Optional accelerator strategy name.
+        segmenter: Optional segmenter strategy name ('patch', 'slic', etc.).
+        masker: Optional masker strategy name.
         segmenter_kwargs: Extra parameters forwarded to the Segmenter
-            (e.g., initial grid, gradient threshold). Factory populates
+            (e.g., n_segments for SLIC). Factory populates
             defaults; callers may override before passing to build().
         use_amp: If True, run model forward under torch.autocast(fp16).
             Only takes effect when the model is on a CUDA device.
@@ -47,7 +48,8 @@ class ImputerConfig:
     n_players_text: int
     grid_size: int
     text_total_length: int
-    accelerator: Optional[str] = None
+    segmenter: Optional[str] = None
+    masker: Optional[str] = None
     segmenter_kwargs: dict = field(default_factory=dict)
     use_amp: bool = False
 

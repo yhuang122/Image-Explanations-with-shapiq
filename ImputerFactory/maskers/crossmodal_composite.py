@@ -10,8 +10,10 @@ from .base import BaseMasker
 from .vision_mean import VisionMeanMasker
 from .text_attention import TextAttentionMasker
 from ImputerFactory.data import PhysicalMask, ProcessorOutput
+from . import register_masker
 
 
+@register_masker("crossmodal")
 class CrossModalCompositeMasker(BaseMasker):
     """
     Cross-modal occlusion orchestrator for VLMs.

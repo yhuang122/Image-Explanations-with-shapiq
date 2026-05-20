@@ -10,7 +10,10 @@ import torch
 from .base import BaseMasker
 from ImputerFactory.data import PhysicalMask, ProcessorOutput
 
+from . import register_masker
 
+
+@register_masker("crossmodal_mean")
 class CrossModalMeanMasker(BaseMasker):
     """
     Cross-modal occlusion for Vision-Language Models.  (DEPRECATED)

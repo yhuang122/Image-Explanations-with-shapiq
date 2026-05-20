@@ -1,7 +1,9 @@
 from .base import BaseSegmenter
 from ImputerFactory.data import ImputerConfig
 
+from . import register_segmenter
 
+@register_segmenter("hybrid")
 class HybridSegmenter(BaseSegmenter):
     """Gradient priors paired with adaptive segmenting."""
 
