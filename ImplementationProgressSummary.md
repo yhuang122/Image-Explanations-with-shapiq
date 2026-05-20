@@ -12,15 +12,18 @@
 | | `ProcessorOutput` | ✅ Done | Standardized HuggingFace inputs wrapper |
 | **Segmenters** | `BaseSegmenter` | ✅ Done | Abstract: `get_layout()` + `generate_masks()` |
 | | `PatchSegmenter` | ✅ Done | Rigid grid, supports CLIP/SigLIP/SigLIP2 text masking |
-| | `SLICSegmenter` | ❌ Out of scope | CNN-specific; excluded from CLIP-only focus |
+| | `SLICSegmenter` | 🔄 In progress | CNN perceptual superpixels via skimage SLIC; CPU index-map → GPU scatter |
 | | `GradientGuidedSegmenter` | ⏳ Stub | Needs gradient extraction + watershed layout |
 | | `AdaptiveSegmenter` | ⏳ Stub | Needs coarse-to-fine subdivision logic |
 | | `HybridSegmenter` | ❌ Out of scope | Not planned for current phase |
 | **Maskers** | `BaseMasker` | ✅ Done | Abstract: `apply(ProcessorOutput, PhysicalMask)` |
-| | `CrossModalMeanMasker` | ✅ Done | Multiplicative binary mask (image) + attention_mask swap (text) |
+| | `VisionMeanMasker` | ✅ Done | Pure image occlusion via multiplicative binary mask (out-of-place) |
+| | `TextAttentionMasker` | ✅ Done | Pure text occlusion via attention_mask replacement |
+| | `CrossModalCompositeMasker` | ✅ Done | Composite Pattern: delegates to VisionMeanMasker + TextAttentionMasker |
+| | `CrossModalMeanMasker` | ⚠️ Deprecated | Kept for backward compat; prefer CrossModalCompositeMasker |
 | | `AttentionMasker` | ⏳ Stub | Needs negative-infinity self-attention injection |
 | **Core** | `ImageImputer` | ✅ Done | `forward_1d` + `forward_crossmodal` with batching & device mgmt |
-| **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalMeanMasker |
+| **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalCompositeMasker |
 | **Adapters** | `TensorOps` / `TorchOps` / `JaxOps` | ⏳ Stub | Interface defined, implementations pending |
 | **Integration** | `VisionLanguageGame` | ✅ Done | Thin adapter: delegates to Imputer, ~75 lines |
 
@@ -39,6 +42,7 @@
 | Icon | Meaning |
 |---|---|
 | ⬜ Not started | Task not yet begun |
+| 🔄 Planning | Requirements being discussed, design in progress |
 | 🔄 In progress | Work underway |
 | ✅ Done | Completed and verified |
 | ⬜ Waiting on A | Blocked until Team A provides input |
