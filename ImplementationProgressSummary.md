@@ -164,10 +164,12 @@ After B2.1 is complete, verify the SLICSegmenter + VisionMeanMasker pipeline wor
 
 #### B6. Evaluation Experiment Infrastructure
 
+> A1.2 already completed the API migration for insertion_deletion.py. B6 covers the broader pipeline: running experiments at scale, producing AID curves, and building reusable evaluation tooling.
+
 | # | Task | Details | Status |
 |---|---|---|---|
-| B6.1 | Insertion/Deletion curve migration | Migrate `experiments/insertion_deletion.py` + `insertion_deletion_siglip.py` to ImputerFactory API. Curve: prediction change (Y) vs fraction k/(n_img+n_txt) (X). Validate AID values match `src` baseline (±1e-4) | 🔄 Planning |
-| B6.2 | Faithfulness evaluation suite | Migrate `experiments/faithfulness.py` to ImputerFactory API. Compare faithfulness metrics before/after | ⬜ Not started |
+| B6.1 | Insertion/Deletion evaluation pipeline | Build reusable AID curve pipeline on MSCOCO subset (10 samples). Validate AID values vs `src` baseline (±1e-4). Produce normalized AID curves for all mode/order combos | 🔄 Planning |
+| B6.2 | Faithfulness evaluation suite | Build reusable faithfulness evaluation harness. Compare metrics before/after migration | ⬜ Not started |
 
 | # | Task | Details | Status |
 |---|---|---|---|
