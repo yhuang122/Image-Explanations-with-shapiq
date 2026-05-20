@@ -11,7 +11,7 @@ from .core.imputer import ImageImputer
 from .data import ImputerConfig, ProcessorOutput
 from .segmenters.patch import PatchSegmenter
 from .segmenters.base import BaseSegmenter
-from .maskers.mean import CrossModalMeanMasker
+from .maskers.crossmodal_composite import CrossModalCompositeMasker
 from .maskers.base import BaseMasker
 
 
@@ -24,10 +24,9 @@ class ImageImputerFactory:
         imputer = factory.build(model, processor, input_image, input_text)
 
     Accelerator options (future):
-        - None        → PatchSegmenter + CrossModalMeanMasker (baseline for VLMs)
+        - None        → PatchSegmenter + CrossModalCompositeMasker (baseline for VLMs)
         - "gradient"  → GradientGuidedSegmenter
         - "adaptive"  → AdaptiveSegmenter
-        - "hybrid"    → HybridSegmenter
     """
 
     def build(
@@ -177,7 +176,7 @@ class ImageImputerFactory:
     @staticmethod
     def _create_masker(accelerator: Optional[str]) -> BaseMasker:
         """Create the appropriate Masker."""
-        # For VLMs, CrossModalMeanMasker is the default
-        # AttentionMasker would be used for more advanced occlusion
-        return CrossModalMeanMasker()
+        # For VLMs, CrossModalCompositeMasker is the default.
+        # It delegates to VisionMeanMasker + TextAttentionMasker internally.
+        return CrossModalCompositeMasker()
 

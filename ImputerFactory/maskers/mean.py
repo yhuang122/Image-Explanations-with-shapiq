@@ -1,3 +1,10 @@
+"""
+DEPRECATED — CrossModalMeanMasker.
+
+Kept for backward compatibility. The preferred cross-modal masker is
+CrossModalCompositeMasker (composite of VisionMeanMasker + TextAttentionMasker).
+"""
+
 import torch
 
 from .base import BaseMasker
@@ -6,7 +13,7 @@ from ImputerFactory.data import PhysicalMask, ProcessorOutput
 
 class CrossModalMeanMasker(BaseMasker):
     """
-    Cross-modal occlusion for Vision-Language Models.
+    Cross-modal occlusion for Vision-Language Models.  (DEPRECATED)
 
     Image: multiplies pixel_values with a binary mask. Since CLIP/SigLIP
     inputs are normalized (mean ≈ 0), zeroing out pixels is equivalent to
@@ -14,6 +21,9 @@ class CrossModalMeanMasker(BaseMasker):
 
     Text: replaces attention_mask with the coalition-derived text mask
     (1 = attend, 0 = ignore).
+
+    Users should prefer CrossModalCompositeMasker, which decomposes into
+    VisionMeanMasker + TextAttentionMasker via the Composite pattern.
     """
 
     def apply(
