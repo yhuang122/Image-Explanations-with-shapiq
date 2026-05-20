@@ -48,7 +48,7 @@ factory.build(model, processor, input_image, input_text)
 ├─ 5. Build ImputerConfig
 │     └─ ImputerConfig(model_type="clip", image_size=224, patch_size=32,
 │         n_channels=3, n_players_image=49, n_players_text=8,
-│         grid_size=7, text_total_length=10, accelerator=None,
+│         grid_size=7, text_total_length=10, segmenter=None,
 │         segmenter_kwargs={})
 │
 ├─ 6. _create_segmenter(config)

@@ -77,7 +77,7 @@
 - **拥有**：组件选择逻辑、模型内省、一次性预处理
 - **不拥有**：分割、遮挡、前向传播、批处理
 - **接口约定**：
-  - `build(model, processor, input_image, input_text, accelerator=...)` → `ImageImputer`
+  - `build(model, processor, input_image, input_text, segmenter=..., masker=...)` → `ImageImputer`
 - **必须**：推断模型类型、计算文本玩家数、创建适当的 Segmenter+Masker
 - **禁止**：运行模型前向传播、生成掩码、施加遮挡
 
@@ -189,7 +189,7 @@ factory.build(model, processor, input_image, input_text)
 ├─ 5. 构建 ImputerConfig
 │     └─ ImputerConfig(model_type="clip", image_size=224, patch_size=32,
 │         n_channels=3, n_players_image=49, n_players_text=8,
-│         grid_size=7, text_total_length=10, accelerator=None,
+│         grid_size=7, text_total_length=10, segmenter=None,
 │         segmenter_kwargs={})
 │
 ├─ 6. _create_segmenter(config)
@@ -471,7 +471,7 @@ src.plot.plot_image_and_text_together(
 
 ### `ImputerFactory/data.py`
 四个 dataclass 作为通用数据协议：
-- **`ImputerConfig`**：由 Factory 生产的只读配置。包含 `model_type`、`image_size`、`patch_size`、`n_channels`、`n_players_image`、`n_players_text`、`grid_size`、`text_total_length`、`accelerator` 和 `segmenter_kwargs`（传递给 Segmenter 用于可变块大小）。所有组件共享。
+- **`ImputerConfig`**：由 Factory 生产的只读配置。包含 `model_type`、`image_size`、`patch_size`、`n_channels`、`n_players_image`、`n_players_text`、`grid_size`、`text_total_length`、`segmenter`、`masker` 和 `segmenter_kwargs`（传递给 Segmenter 用于可变块大小）。所有组件共享。
 - **`SpatialLayout`**：描述空间划分的不可变元数据。由 Segmenter 一次性生产，由 Imputer 消费。
 - **`PhysicalMask`**：具体张量掩码。`image_binary_mask` (N, C, H, W) float + `text_attention_mask` (N, L) int。
 - **`ProcessorOutput`**：封装 `pixel_values`、`input_ids`、`attention_mask`，提供 `to_dict()` 用于模型前向传播。
@@ -497,7 +497,7 @@ src.plot.plot_image_and_text_together(
 - 存储：`config`、`inputs_original`、`inputs_raw`、`input_image`、`input_text`、`model`、`processor`、`segmenter`、`masker`、`layout`
 
 ### `ImputerFactory/factory.py` — ImageImputerFactory
-- `build(model, processor, input_image, input_text, accelerator=None)`：
+- `build(model, processor, input_image, input_text, segmenter=None, masker=None)`：
   1. 推断模型类型（clip/siglip/siglip2）
   2. 提取模型维度并计算派生值（grid_size、n_players_image）
   3. 一次性预处理以确定 `n_players_text` + `text_total_length`

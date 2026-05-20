@@ -17,7 +17,7 @@
   - `generate_masks(coalitions_image, coalitions_text)` → returns `PhysicalMask` (called per batch)
 - **Must NOT**: access `model`, call `processor`, mutate tensors on GPU inside `generate_masks`
 - **Allowed to vary**: grid shape, player count, player-to-pixel mapping, mask generation algorithm
-- **Examples**: `PatchSegmenter` (rigid grid), `GradientGuidedSegmenter` (gradient-based), `AdaptiveSegmenter` (score-driven)
+- **Examples**: `PatchSegmenter` (rigid grid), `SLICSegmenter` (perceptual superpixels), `GradientGuidedSegmenter` (gradient-based, future), `AdaptiveSegmenter` (score-driven, future)
 
 ### Masker
 **Sole responsibility**: Feature occlusion — apply the `PhysicalMask` to `ProcessorOutput`.
@@ -48,7 +48,7 @@
 - **Owns**: component selection logic, model introspection, one-time preprocessing
 - **Does NOT own**: segmentation, occlusion, forward pass, batching
 - **Contract**:
-  - `build(model, processor, input_image, input_text, accelerator=...)` → `ImageImputer`
+  - `build(model, processor, input_image, input_text, segmenter=..., masker=...)` → `ImageImputer`
 - **Must**: infer model type, count text players, create appropriate Segmenter+Masker
 - **Must NOT**: run model forward, generate masks, apply occlusion
 
@@ -65,7 +65,7 @@
 ### Data Types (in `ImputerFactory/data.py`)
 **Sole responsibility**: Universal data protocol — define the shapes and semantics of objects passed between modules.
 
-- `ImputerConfig`: shared read-only configuration (produced by Factory, consumed by all modules). Contains model metadata, accelerator selection, and `segmenter_kwargs` for variable block sizing.
+- `ImputerConfig`: shared read-only configuration (produced by Factory, consumed by all modules). Contains model metadata, segmenter/masker selection, and `segmenter_kwargs` for variable block sizing.
 - `SpatialLayout`: immutable metadata (produced by Segmenter, consumed by Imputer)
 - `PhysicalMask`: concrete tensor masks (produced by Segmenter/imputer translation, consumed by Masker)
 - `ProcessorOutput`: standardized model inputs (produced by Factory, consumed by Masker and Imputer)
@@ -126,7 +126,7 @@ Coalitions (np.bool)                Visualization / Notebook
 
 ### `ImputerFactory/data.py`
 Four dataclasses serve as the universal data protocol:
-- **`ImputerConfig`**: Read-only configuration produced by Factory. Contains `model_type`, `image_size`, `patch_size`, `n_channels`, `n_players_image`, `n_players_text`, `grid_size`, `text_total_length`, `accelerator`, and `segmenter_kwargs` (forwarded to Segmenter for variable block sizing). Shared across all components.
+- **`ImputerConfig`**: Read-only configuration produced by Factory. Contains `model_type`, `image_size`, `patch_size`, `n_channels`, `n_players_image`, `n_players_text`, `grid_size`, `text_total_length`, `segmenter`, `masker`, and `segmenter_kwargs` (forwarded to Segmenter for variable block sizing). Shared across all components.
 - **`SpatialLayout`**: Immutable metadata describing the spatial division. Produced once by Segmenter, consumed by Imputer.
 - **`PhysicalMask`**: Concrete tensor masks. `image_binary_mask` (N, C, H, W) float + `text_attention_mask` (N, L) int.
 - **`ProcessorOutput`**: Wraps `pixel_values`, `input_ids`, `attention_mask` with a `to_dict()` for model forwarding.
@@ -174,13 +174,13 @@ Four dataclasses serve as the universal data protocol:
 - Stores: `config`, `inputs_original`, `inputs_raw`, `input_image`, `input_text`, `model`, `processor`, `segmenter`, `masker`, `layout`
 
 ### `ImputerFactory/factory.py` — ImageImputerFactory
-- `build(model, processor, input_image, input_text, accelerator=None)`:
+- `build(model, processor, input_image, input_text, segmenter=None, masker=None)`:
   1. Infers model type (clip/siglip/siglip2)
   2. Extracts model dimensions and computes derived values (grid_size, n_players_image)
   3. Preprocesses once to determine `n_players_text` + `text_total_length`
-  4. **Builds `ImputerConfig`** — single source of truth for all metadata, accelerator selection, and `segmenter_kwargs`
+  4. **Builds `ImputerConfig`** — single source of truth for all metadata, segmenter/masker selection, and `segmenter_kwargs`
   5. Creates segmenter via `_create_segmenter(config)` — config flows into Segmenter
-  6. Creates masker via `_create_masker()` — default is `CrossModalCompositeMasker` (VisionMeanMasker + TextAttentionMasker)
+  6. Creates masker via `_create_masker(config)` — config flows into Masker
   7. Wires `ProcessorOutput` + raw dict + config + raw image/text into `ImageImputer`
 
 ### `Game/game_huggingface.py` — VisionLanguageGame
@@ -194,7 +194,9 @@ Four dataclasses serve as the universal data protocol:
 
 ---
 
-## Evaluation Experiments (Planning)
+## Evaluation Experiments
+
+> **Ownership**: Team B — Feature Development. A group provides validation via A2 comparison harness.
 
 ### Insertion / Deletion Curve (`experiments/insertion_deletion.py`)
 
@@ -232,4 +234,3 @@ Four dataclasses serve as the universal data protocol:
 ## Known Issues
 
 - **Crossmodal edge-case processor calls**: When `budget_image % batch_size ≠ 0` or `budget_text % batch_size ≠ 0`, the last image and/or text batch have incomplete sizes (e.g., `img_bs=15, txt_bs=51` for `batch_size=64, budget_image=4559, budget_text=115`). The 2 (img batches) × 2 (text batches) = 4 combinations yield 3 cases where `img_bs ≠ txt_bs`. In those cases `_preprocess_batch()` must re-invoke the HF processor to create inputs with matching batch dimensions. The original `src` code has the same behavior (it calls `processor_function` directly in the equivalent branches), so this is not a regression — it is inherent to the double-loop crossmodal design. Total extra calls per `forward_crossmodal`: at most 3 (~2 ms each, negligible).
-- No mixed-precision (AMP) support yet — relevant for larger models

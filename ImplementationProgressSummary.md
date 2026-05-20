@@ -6,15 +6,15 @@
 
 | Module | Component | Status | Notes |
 |---|---|---|---|
-| **Data Types** | `ImputerConfig` | ✅ Done | Shared read-only config: model metadata + accelerator + segmenter_kwargs |
+| **Data Types** | `ImputerConfig` | ✅ Done | Shared read-only config: model metadata + segmenter + masker + segmenter_kwargs |
 | | `SpatialLayout` | ✅ Done | Player↔pixel/token mapping metadata |
 | | `PhysicalMask` | ✅ Done | Concrete masks: `image_binary_mask` (N,C,H,W) + `text_attention_mask` (N,L) |
 | | `ProcessorOutput` | ✅ Done | Standardized HuggingFace inputs wrapper |
 | **Segmenters** | `BaseSegmenter` | ✅ Done | Abstract: `get_layout()` + `generate_masks()` |
 | | `PatchSegmenter` | ✅ Done | Rigid grid, supports CLIP/SigLIP/SigLIP2 text masking |
 | | `SLICSegmenter` | 🔄 In progress | CNN perceptual superpixels via skimage SLIC; CPU index-map → GPU scatter |
-| | `GradientGuidedSegmenter` | ⏳ Stub | Needs gradient extraction + watershed layout |
-| | `AdaptiveSegmenter` | ⏳ Stub | Needs coarse-to-fine subdivision logic |
+| | `GradientGuidedSegmenter` | 🔬 Future | Future exploration: gradient extraction + watershed layout |
+| | `AdaptiveSegmenter` | 🔬 Future | Future exploration: coarse-to-fine subdivision logic |
 | | `HybridSegmenter` | ❌ Out of scope | Not planned for current phase |
 | **Maskers** | `BaseMasker` | ✅ Done | Abstract: `apply(ProcessorOutput, PhysicalMask)` |
 | | `VisionMeanMasker` | ✅ Done | Pure image occlusion via multiplicative binary mask (out-of-place) |
@@ -24,13 +24,15 @@
 | | `AttentionMasker` | ⏳ Stub | Needs negative-infinity self-attention injection |
 | **Core** | `ImageImputer` | ✅ Done | `forward_1d` + `forward_crossmodal` with batching & device mgmt |
 | **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalCompositeMasker |
-| **Adapters** | `TensorOps` / `TorchOps` / `JaxOps` | ⏳ Stub | Interface defined, implementations pending |
+| **Adapters** | `TensorOps` / `TorchOps` | ⏳ Stub | Interface defined; PyTorch-only (JAX out of scope) |
 | **Integration** | `VisionLanguageGame` | ✅ Done | Thin adapter: delegates to Imputer, ~75 lines |
 
 ### Legend
 - ✅ Done — fully implemented and tested
 - ⏳ Stub — skeleton exists, logic outstanding
+- 🔬 Future — future exploration / research item
 - ❌ Not started — not yet created
+- ❌ Out of scope — not planned
 
 ---
 
@@ -117,7 +119,7 @@
 
 ### Team B — Feature Development & Bug Fix (2 people)
 
-**Mission**: Implement CLIP-compatible accelerator segmenters, fix bugs reported by Team A, and optimize the Imputer pipeline.
+**Mission**: Implement CLIP-compatible segmenters, fix bugs reported by Team A, and optimize the Imputer pipeline.
 
 #### B1. Bug Fix (Responsive — from Team A reports)
 
@@ -128,12 +130,25 @@
 | B1.3 | Model type detection | Borderline model name patterns | ⬜ Waiting on A |
 | B1.4 | Memory / OOM | Large models (ViT-L) with high budget | ⬜ Waiting on A |
 
-#### B2. Accelerator Segmenters
+#### B2. Segmenters (ordered by priority)
 
 | # | Feature | Details | Priority | Status |
 |---|---|---|---|---|
-| B2.1 | `GradientGuidedSegmenter` | Extract gradient map → skimage watershed → non-uniform static layout | Medium | 🔄 In progress |
-| B2.2 | `AdaptiveSegmenter` | Coarse grid → score-driven subdivision → feedback loop. Requires `is_stateful=True` protocol between Imputer ↔ Segmenter | Medium | ⬜ Not started |
+| B2.1 | `SLICSegmenter` | CPU: skimage SLIC → 2D index map. GPU: scatter coalition bits via index map | **High** | 🔄 In progress |
+| B2.2 | `GradientGuidedSegmenter` | Future exploration: gradient map → skimage watershed → non-uniform static layout | 🔬 Future | ⬜ Not started |
+| B2.3 | `AdaptiveSegmenter` | Future exploration: coarse grid → score-driven subdivision → feedback loop. Requires `is_stateful=True` protocol | 🔬 Future | ⬜ Not started |
+
+#### B2a. SLICSegmenter — CLIP-ResNet Validation
+
+After B2.1 is complete, verify the SLICSegmenter + VisionMeanMasker pipeline works on CNN-based CLIP variants. Unlike ViT models where patches are rigid grids, CNN backbones process the full spatial input — SLIC superpixels are required to avoid OOD artifacts.
+
+| # | Model | Backbone | Key Check |
+|---|---|---|---|
+| B2a.1 | `openai/clip-rn50` | ResNet-50 | Correct model detection (should still return `"clip"`), SLIC layout produced, no crash |
+| B2a.2 | `openai/clip-rn101` | ResNet-101 | Same as above, verify memory usage |
+| B2a.3 | `openai/clip-rn50x4` | ResNet-50×4 | Larger ResNet variant — validate throughput |
+
+**Integration check**: Run `example.ipynb` equivalent with CLIP-ResNet + `segmenter="slic"`. Expected: AID values within ±5% of ViT-based results (SLIC superpixels may yield different but valid attributions). If the workflow fails (crash / NaN / OOM), B1 fixes take priority.
 
 #### B3. Masker Extension
 
@@ -141,14 +156,18 @@
 |---|---|---|---|
 | B3.1 | `AttentionMasker` implementation | Hook self-attention, inject -inf mask matrices. Requires PyTorch `register_forward_hook` or HF `output_attentions` override | ⬜ Not started |
 
-#### B4. Backend Adapter Extraction
+#### B4. Backend Adapter Extraction (PyTorch only)
 
 | # | Feature | Details | Status |
 |---|---|---|---|
 | B4.1 | `TorchOps` extraction | Move inline PyTorch ops from Imputer/Segmenter into adapter | ⬜ Not started |
-| B4.2 | `JaxOps` skeleton | Interface + stub for JAX-native models | ⬜ Not started |
 
-#### B5. Performance Optimization
+#### B6. Evaluation Experiment Infrastructure
+
+| # | Task | Details | Status |
+|---|---|---|---|
+| B6.1 | Insertion/Deletion curve migration | Migrate `experiments/insertion_deletion.py` + `insertion_deletion_siglip.py` to ImputerFactory API. Curve: prediction change (Y) vs fraction k/(n_img+n_txt) (X). Validate AID values match `src` baseline (±1e-4) | 🔄 Planning |
+| B6.2 | Faithfulness evaluation suite | Migrate `experiments/faithfulness.py` to ImputerFactory API. Compare faithfulness metrics before/after | ⬜ Not started |
 
 | # | Task | Details | Status |
 |---|---|---|---|
@@ -175,7 +194,7 @@
 ```
 Team A                              Team B
 ──────                              ──────
-A1.1–A1.8 (migrate experiments)    B2.1 GradientGuidedSegmenter
+A1.1–A1.8 (migrate experiments)    B2.1 SLICSegmenter
     │                                   │
     ├─ A2 (equivalence tests) ──────────┤ (bug reports)
     │       │                           │
@@ -183,16 +202,18 @@ A1.1–A1.8 (migrate experiments)    B2.1 GradientGuidedSegmenter
     ├─ A3 (cross-model) ──────────► B1 (bug fixes)
     │       │                           │
     │       ▼                           ▼
-    └─ A4 (feedback) ─────────────► B2.2 AdaptiveSegmenter
+    └─ A4 (feedback) ─────────────► B2a CLIP-ResNet validation
                                         │
                                         ▼
-                                    B3–B5 (extensions)
+                                    B3, B5, B6 (extensions)
+                                    B2.2–B2.3 (future)
 ```
 
 | Dependency | Blocker | Blocked by |
 |---|---|---|
 | B1 (bug fix) | A2/A3 reports | Team A findings |
-| B2.2 (Adaptive) | `is_stateful` protocol | B1 stability |
+| B2a (ResNet validation) | B2.1 (SLIC) complete | B2.1 |
+| B2.2–B2.3 (GGS/AS) | N/A (future exploration) | Future milestone |
 | A3 (cross-model) | A1 completion | All experiments pass |
 
 ---
@@ -202,14 +223,12 @@ A1.1–A1.8 (migrate experiments)    B2.1 GradientGuidedSegmenter
 | Week | Team A | Team B | PM Gate |
 |---|---|---|---|
 | W1 | A1.1–A1.4, A2.1 | B1 (bug fixes), B4.1 (TorchOps) | Experiments 1–4 pass |
-| W2 | A1.5–A1.8, A2.2–A2.3 | B2.1 (GradientGuided) | All 8 experiments pass |
-| W3 | A3.1–A3.5 (cross-model) | B2.2 (Adaptive), B3.1 | Cross-model tests green |
-| W4 | A4 (feedback loop) | B4.2 (JaxOps), B5.1 (memory) | Feature freeze, integration test |
+| W2 | A1.5–A1.8, A2.2–A2.3 | B2.1 (SLICSegmenter) | All 8 experiments pass |
+| W3 | A3.1–A3.5 (cross-model) | B2a (CLIP-ResNet validation), B6.1 (insertion/deletion curve) | SLIC + ResNet workflow green |
+| W4 | A4 (feedback loop) | B6.2 (faithfulness suite) | Feature freeze, integration test |
 
 ---
 
 ### Known Issues (tracked for B1)
 
 - **Crossmodal edge-case processor calls**: When `budget_image % batch_size ≠ 0` or `budget_text % batch_size ≠ 0`, the last image and/or text batch have incomplete sizes (e.g., `img_bs=15, txt_bs=51` for `batch_size=64, budget_image=4559, budget_text=115`). The 2 (img batches) × 2 (text batches) = 4 combinations yield 3 cases where `img_bs ≠ txt_bs`. In those cases `_preprocess_batch()` must re-invoke the HF processor to create inputs with matching batch dimensions. The original `src` code has the same behavior (it calls `processor_function` directly in the equivalent branches), so this is not a regression — it is inherent to the double-loop crossmodal design. Total extra calls per `forward_crossmodal`: at most 3 (~2 ms each, negligible).
-- `_repeat_inputs` uses `.expand().clone()` which duplicates memory; could be optimized with stride tricks| ✅ Done (Needs profiling validation)
-- No mixed-precision (AMP) support yet — relevant for larger models| ✅ Done (Opt-in, needs numeric validation)
