@@ -48,15 +48,16 @@ factory.build(model, processor, input_image, input_text)
 ├─ 5. Build ImputerConfig
 │     └─ ImputerConfig(model_type="clip", image_size=224, patch_size=32,
 │         n_channels=3, n_players_image=49, n_players_text=8,
-│         grid_size=7, text_total_length=10, segmenter=None,
-│         segmenter_kwargs={})
+│         grid_size=7, text_total_length=10, segmenter="patch",
+│         masker="crossmodal", segmenter_kwargs={})
 │
 ├─ 6. _create_segmenter(config)
-│     └─ PatchSegmenter(config)  ← receives shared config
+│     └─ get_segmenter("patch") → PatchSegmenter (registry lookup)
 │     └─ Produces SpatialLayout(n_players_image=49, n_players_text=8, ...)
 │
-├─ 7. _create_masker(...)
-│     └─ CrossModalMeanMasker()
+├─ 7. _create_masker(config)
+│     └─ get_masker("crossmodal") → CrossModalCompositeMasker (registry lookup)
+│         └─ Internally: VisionMeanMasker + TextAttentionMasker
 │
 ├─ 8. Build ProcessorOutput + assemble ImageImputer
 │     └─ inputs_original: ProcessorOutput(pixel_values, input_ids, attention_mask)
@@ -70,8 +71,8 @@ factory.build(model, processor, input_image, input_text)
 **Assembly result:**
 | Component | Instance | Key parameters |
 |---|---|---|
-| Segmenter | `PatchSegmenter` | grid=7×7, n_players_image=49 |
-| Masker | `CrossModalMeanMasker` | Image multiplicative mask + text attention swap |
+| Segmenter | `PatchSegmenter` | grid=7×7, n_players_image=49, resolved via registry |
+| Masker | `CrossModalCompositeMasker` | VisionMeanMasker + TextAttentionMasker (registry lookup) |
 | Layout | `SpatialLayout` | n_players=57 (49 img + 8 txt) |
 | Inputs | `ProcessorOutput` | 1-sample preprocessed result |
 
@@ -301,15 +302,15 @@ src.plot.plot_image_and_text_together(
 │ Model  │    │                  │    │  crossmodal(game,   │    │ (28,50):1.35 │
 │Proc.   │    │ ┌PatchSegmenter┐ │    │  budget=2^19)       │    │    ...       │
 └────────┘    │ │CrossModal    │ │    │                     │    └──────────────┘
-              │ │MeanMasker    │ │    │ ① split_budget     │
+              │ │Composite     │ │    │ ① split_budget      │
               │ └──────────────┘ │    │ ② sample coalitions │
               │         │        │    │ ③ game.value_func_  │
               │         ▼        │    │   crossmodal()      │
-              │ ┌ImageImputer┐  │    │   └→ imputer.fwd_   │    ┌──────────────┐
+              │ ┌ImageImputer┐   │    │   └→ imputer.fwd_   │    ┌──────────────┐
               │ │forward_1d() │  │    │      crossmodal()   │    │  Heatmap +   │
-              │ │fwd_cross()  │◄─┼────┤ ④ aggregate(WLS)   │───►│  Interaction │
-              │ └────────────┘  │    └─────────────────────┘    │  Lines       │
-              └──────────────────┘                              └──────────────┘
+              │ │fwd_cross()  │◄─┼────┤ ④ aggregate(WLS)    │───►│  Interaction │
+              │ └────────────┘   │    └─────────────────────┘    │  Lines       │
+              └──────────────────┘                               └──────────────┘
 ```
 
 ---
