@@ -51,3 +51,41 @@ class BaseSegmenter(ABC):
             PhysicalMask with image_binary_mask and/or text_attention_mask set.
         """
         pass
+
+    # ─── Shared helper for VLM text masking ───────────────────────────────
+    # Image segmentation differs per Segmenter (patch / SLIC / future),
+    # but the text-side padding is purely a function of model_type and is
+    # identical across all VLM segmenters. Centralised here so subclasses
+    # only need to implement the image side.
+
+    def _build_text_attention_mask(self, coalitions: np.ndarray) -> torch.Tensor:
+        """
+        Convert token-level coalitions to an attention mask matching the
+        model's expected total length.
+
+        Args:
+            coalitions: np.ndarray[bool], shape (N, n_players_text).
+
+        Returns:
+            torch.IntTensor (N, text_total_length) — 1=attend, 0=ignore.
+        """
+        cfg = self.config
+        coalition_t = torch.from_numpy(coalitions)
+        n_coalitions = coalition_t.shape[0]
+
+        if cfg.model_type in ("siglip", "siglip2"):
+            # SigLIP / SigLIP2: right-pad with 1s after the valid tokens
+            pad_len = cfg.text_total_length - cfg.n_players_text
+            return torch.cat(
+                (coalition_t, torch.ones(n_coalitions, pad_len)),
+                dim=1,
+            ).int()
+        if cfg.model_type == "clip":
+            # CLIP: wrap with BOS=1, EOS=1
+            return torch.cat(
+                (torch.ones(n_coalitions, 1),
+                 coalition_t,
+                 torch.ones(n_coalitions, 1)),
+                dim=1,
+            ).int()
+        raise ValueError(f"Unsupported model_type: {cfg.model_type}")

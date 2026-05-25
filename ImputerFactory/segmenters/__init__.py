@@ -41,4 +41,4 @@ def get_segmenter(name: str) -> type:
 # ── Built-in segmenters ────────────────────────────────────────────────
 
 from .patch import PatchSegmenter
-# Future: from .slic import SLICSegmenter
+from .slic import SLICSegmenter

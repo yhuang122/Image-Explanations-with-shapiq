@@ -54,7 +54,7 @@ class PatchSegmenter(BaseSegmenter):
             mask.image_binary_mask = self._generate_image_mask(coalitions_image)
 
         if coalitions_text is not None:
-            mask.text_attention_mask = self._generate_text_mask(coalitions_text)
+            mask.text_attention_mask = self._build_text_attention_mask(coalitions_text)
 
         return mask
 
@@ -90,45 +90,3 @@ class PatchSegmenter(BaseSegmenter):
             .repeat(1, self.n_channels, 1, 1)
 
         return binary_masks.float()
-
-    def _generate_text_mask(self, coalitions: np.ndarray) -> torch.Tensor:
-        """
-        Convert token-level coalition array to attention mask.
-
-        Handles BOS/EOS padding differences between CLIP and SigLIP.
-
-        Args:
-            coalitions: np.ndarray[bool], shape (N, n_players_text).
-
-        Returns:
-            torch.IntTensor (N, text_total_length) with 1=attend, 0=ignore.
-        """
-        coalition_t = torch.from_numpy(coalitions)
-        n_coalitions = coalition_t.shape[0]
-
-        if self.model_type == "siglip2":
-            # SigLIP2: pad with ones after the valid text tokens
-            pad_len = self.text_total_length - self.n_players_text
-            text_masks = torch.cat(
-                (coalition_t, torch.ones(n_coalitions, pad_len)),
-                dim=1,
-            ).int()
-        elif self.model_type == "siglip":
-            # SigLIP: same padding logic as siglip2
-            pad_len = self.text_total_length - self.n_players_text
-            text_masks = torch.cat(
-                (coalition_t, torch.ones(n_coalitions, pad_len)),
-                dim=1,
-            ).int()
-        elif self.model_type == "clip":
-            # CLIP: BOS=1 at position 0, EOS=1 at the end
-            text_masks = torch.cat(
-                (torch.ones(n_coalitions, 1),
-                 coalition_t,
-                 torch.ones(n_coalitions, 1)),
-                dim=1,
-            ).int()
-        else:
-            raise ValueError(f"Unsupported model_type: {self.model_type}")
-
-        return text_masks

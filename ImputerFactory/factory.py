@@ -24,8 +24,9 @@ class ImageImputerFactory:
         imputer = factory.build(model, processor, input_image, input_text)
 
     Segmenter options:
-        - None / "patch" → PatchSegmenter (baseline for VLMs)
-        - "slic"         → SLICSegmenter (perceptual superpixels)
+        - None           → auto: PatchSegmenter for ViT, SLICSegmenter for CNN
+        - "patch"        → PatchSegmenter (rigid grid, baseline for ViT)
+        - "slic"         → SLICSegmenter (perceptual superpixels, required for CNN)
 
     Masker options:
         - None / "crossmodal_mean" → CrossModalMeanMasker (baseline for VLMs)
@@ -62,12 +63,13 @@ class ImageImputerFactory:
         # ── 1. Infer model type ─────────────────────────────────────────
         model_type = self._infer_model_type(model)
 
-        # ── 2. Extract model dimensions ─────────────────────────────────
-        image_size = model.vision_model.embeddings.image_size
-        patch_size = model.vision_model.embeddings.patch_size
-        n_channels = model.vision_model.embeddings.config.num_channels
-        grid_size = image_size // patch_size
-        n_players_image = grid_size ** 2
+        # ── 2. Extract model dimensions (ViT or CNN backbone) ──────────
+        image_size, patch_size, n_channels = self._extract_vision_dims(model)
+        is_vit = patch_size > 0
+        grid_size = image_size // patch_size if is_vit else 0
+        # n_players_image is provisional for ViT (grid²) and resolved later
+        # for SLIC (the actual superpixel count comes from skimage).
+        n_players_image = grid_size ** 2 if is_vit else 0
 
         # ── 3. Preprocess once to determine text players ─────────────────
         inputs_dict = self._preprocess(processor, input_image, input_text, model_type)
@@ -90,10 +92,17 @@ class ImageImputerFactory:
             use_amp=use_amp,
         )
 
-        # ── 5. Select Segmenter (default: "patch") ──────────────────────
+        # ── 5. Select Segmenter ────────────────────────────────────────
+        # Default routing: ViT → patch grid, CNN backbone → SLIC superpixels.
+        # Caller can override by passing segmenter="patch"/"slic" explicitly.
         if config.segmenter is None:
-            config.segmenter = "patch"
+            config.segmenter = "patch" if is_vit else "slic"
+        if config.segmenter == "slic":
+            # SLIC needs the raw image to plan superpixels (CPU once).
+            config.segmenter_kwargs.setdefault("image_array", input_image)
         segmenter = self._create_segmenter(config)
+        # SLIC determines the real player count at __init__; sync config.
+        config.n_players_image = segmenter.get_layout().n_players_image
 
         # ── 6. Select Masker (default: "crossmodal_mean") ────────────────────
         if config.masker is None:
@@ -142,6 +151,30 @@ class ImageImputerFactory:
         elif any("siglip" in value for value in normalized):
             return "siglip"
         return "clip"
+
+    @staticmethod
+    def _extract_vision_dims(model) -> tuple:
+        """
+        Return (image_size, patch_size, n_channels).
+
+        ViT backbones expose `patch_size` via `model.vision_model.embeddings`.
+        CNN backbones (e.g. CLIP-RN50) do not — fall back to `vision_config`
+        and return patch_size=0 to signal "no rigid grid". The Factory uses
+        the zero to route to SLICSegmenter automatically.
+        """
+        vision = model.vision_model
+        embeddings = getattr(vision, "embeddings", None)
+        if embeddings is not None and hasattr(embeddings, "patch_size"):
+            return (
+                embeddings.image_size,
+                embeddings.patch_size,
+                embeddings.config.num_channels,
+            )
+        # CNN fallback
+        vc = getattr(model.config, "vision_config", None) or model.config
+        image_size = int(getattr(vc, "image_size", 224))
+        n_channels = int(getattr(vc, "num_channels", 3))
+        return (image_size, 0, n_channels)
 
     @staticmethod
     def _preprocess(processor, image, text, model_type: str) -> dict:

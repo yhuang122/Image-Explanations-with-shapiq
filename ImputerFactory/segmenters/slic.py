@@ -1,10 +1,169 @@
+"""
+SLICSegmenter — Perceptual superpixel segmenter (skimage SLIC).
+
+Algorithm:
+    1. __init__ (CPU planning, once): run skimage.segmentation.slic on the
+       raw input image. Result is a (H, W) integer label map; each label
+       defines one player. Player count K is the number of superpixels.
+    2. generate_masks (per batch): for each coalition row (N, K) bool,
+       gather labels into a (N, H, W) pixel mask via a single fancy-index
+       operation. Broadcast to channels → (N, C, H, W) float. No Python loop.
+
+Use case: CNN-backbone CLIP variants (RN50/RN101/RN50×4). Rigid patch grids
+would introduce out-of-distribution artefacts at block boundaries; SLIC
+follows perceptual content, keeping each player's pixels visually coherent.
+"""
+
+from typing import Optional
+import numpy as np
+import torch
+
 from .base import BaseSegmenter
-from ImputerFactory.data import ImputerConfig
 from . import register_segmenter
+from ImputerFactory.data import ImputerConfig, SpatialLayout, PhysicalMask
+
+# scikit-image is declared in env.yml. Lazy-imported here so static analysis
+# can still inspect this module if the dep is missing in a stripped env.
+try:
+    from skimage.segmentation import slic as _skimage_slic
+except ImportError:  # pragma: no cover
+    _skimage_slic = None
+
 
 @register_segmenter("slic")
 class SLICSegmenter(BaseSegmenter):
-    """Perceptual superpixels for CNNs (Using skimage SLIC)."""
+    """
+    Perceptual superpixel segmenter for VLMs (especially CNN backbones).
+
+    Required segmenter_kwargs:
+        image_array (PIL.Image | np.ndarray): the raw input image,
+            populated automatically by the Factory.
+
+    Optional segmenter_kwargs:
+        n_segments (int):  target superpixel count (default 49).
+        compactness (float): SLIC compactness (default 10.0).
+        sigma (float):     pre-smoothing Gaussian sigma (default 0.0).
+    """
 
     def __init__(self, config: ImputerConfig):
         super().__init__(config)
+        if _skimage_slic is None:
+            raise ImportError(
+                "SLICSegmenter requires scikit-image. "
+                "Install with `pip install scikit-image`."
+            )
+
+        self.image_size = config.image_size
+        self.n_channels = config.n_channels
+        self.n_players_text = config.n_players_text
+        self.model_type = config.model_type
+        self.text_total_length = config.text_total_length
+
+        kwargs = config.segmenter_kwargs or {}
+        image_array = kwargs.get("image_array")
+        if image_array is None:
+            raise ValueError(
+                "SLICSegmenter requires segmenter_kwargs['image_array'] "
+                "(the raw input image). The Factory populates this when "
+                "segmenter='slic' is selected."
+            )
+        n_segments_target = int(kwargs.get("n_segments", 49))
+        compactness = float(kwargs.get("compactness", 10.0))
+        sigma = float(kwargs.get("sigma", 0.0))
+
+        # ── CPU planning (once) ────────────────────────────────────────
+        image_rgb = self._coerce_rgb_uint8(image_array, self.image_size)
+        raw_labels = _skimage_slic(
+            image_rgb,
+            n_segments=n_segments_target,
+            compactness=compactness,
+            sigma=sigma,
+            start_label=0,
+            channel_axis=-1,
+        )
+        # SLIC may merge / drop segments → remap to contiguous [0, K).
+        unique_ids, packed = np.unique(raw_labels, return_inverse=True)
+        label_map = packed.reshape(self.image_size, self.image_size).astype(np.int64)
+        self.n_players_image = int(unique_ids.size)
+        self._label_map = torch.from_numpy(label_map)  # CPU (H, W) int64
+
+        self._layout = SpatialLayout(
+            n_players_image=self.n_players_image,
+            n_players_text=self.n_players_text,
+            image_size=self.image_size,
+            patch_size=0,   # superpixels are non-uniform — N/A
+            grid_size=0,    # N/A for SLIC
+            n_channels=self.n_channels,
+            model_type=self.model_type,
+            text_total_length=self.text_total_length,
+            is_stateful=False,
+        )
+
+    # ─── Public contract ──────────────────────────────────────────────────
+
+    def get_layout(self) -> SpatialLayout:
+        return self._layout
+
+    def generate_masks(
+        self,
+        coalitions_image: Optional[np.ndarray] = None,
+        coalitions_text: Optional[np.ndarray] = None,
+    ) -> PhysicalMask:
+        mask = PhysicalMask()
+
+        if coalitions_image is not None:
+            mask.image_binary_mask = self._scatter_image_mask(coalitions_image)
+
+        if coalitions_text is not None:
+            mask.text_attention_mask = self._build_text_attention_mask(coalitions_text)
+
+        return mask
+
+    # ─── Internal helpers ─────────────────────────────────────────────────
+
+    def _scatter_image_mask(self, coalitions: np.ndarray) -> torch.Tensor:
+        """
+        Translate (N, K) bool coalitions → (N, C, H, W) float pixel masks.
+
+        Implementation: one vectorised fancy-index gather.
+            result[i, h, w] = coalition[i, label_map[h, w]]
+        No Python loop over coalitions, pixels, or channels.
+        """
+        coalition_t = torch.from_numpy(coalitions).bool()        # (N, K)
+        # Advanced indexing: shape (N, H, W); see PyTorch broadcast rules
+        pixel_masks = coalition_t[:, self._label_map]            # (N, H, W) bool
+        # Broadcast to channel dim, then materialise once as float
+        return pixel_masks.unsqueeze(1).expand(
+            -1, self.n_channels, -1, -1,
+        ).float()
+
+    @staticmethod
+    def _coerce_rgb_uint8(image, target_size: int) -> np.ndarray:
+        """Normalise PIL.Image / ndarray inputs to (H, W, 3) uint8 at target_size."""
+        try:
+            from PIL import Image as PILImage
+        except ImportError:  # pragma: no cover
+            PILImage = None
+
+        if PILImage is not None and isinstance(image, PILImage.Image):
+            return np.asarray(
+                image.convert("RGB").resize((target_size, target_size)),
+                dtype=np.uint8,
+            )
+
+        arr = np.asarray(image)
+        if arr.ndim == 3 and arr.shape[2] > 3:
+            arr = arr[..., :3]
+        if arr.dtype != np.uint8:
+            arr_max = float(arr.max()) if arr.size > 0 else 0.0
+            arr = (arr * 255 if arr_max <= 1.0 else arr).clip(0, 255).astype(np.uint8)
+        if arr.shape[:2] != (target_size, target_size):
+            if PILImage is None:
+                raise ImportError(
+                    "PIL is required to resize ndarray inputs for SLIC.",
+                )
+            arr = np.asarray(
+                PILImage.fromarray(arr).resize((target_size, target_size)),
+                dtype=np.uint8,
+            )
+        return arr
