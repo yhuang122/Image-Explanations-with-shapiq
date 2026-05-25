@@ -134,7 +134,7 @@
 
 | # | Feature | Details | Priority | Status |
 |---|---|---|---|---|
-| B2.1 | `SLICSegmenter` | CPU: skimage SLIC → 2D index map. GPU: scatter coalition bits via index map | **High** | 🔄 In progress |
+| B2.1 | `SLICSegmenter` | CPU: skimage SLIC → 2D index map. GPU: scatter coalition bits via index map | **High** | 🔄 In progress / implementation draft done, validation pending
 | B2.2 | `GradientGuidedSegmenter` | Future exploration: gradient map → skimage watershed → non-uniform static layout | 🔬 Future | ⬜ Not started |
 | B2.3 | `AdaptiveSegmenter` | Future exploration: coarse grid → score-driven subdivision → feedback loop. Requires `is_stateful=True` protocol | 🔬 Future | ⬜ Not started |
 
