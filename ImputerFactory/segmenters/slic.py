@@ -86,6 +86,7 @@ class SLICSegmenter(BaseSegmenter):
         label_map = packed.reshape(self.image_size, self.image_size).astype(np.int64)
         self.n_players_image = int(unique_ids.size)
         self._label_map = torch.from_numpy(label_map)  # CPU (H, W) int64
+        self._label_map_by_device = {torch.device("cpu"): self._label_map}
 
         self._layout = SpatialLayout(
             n_players_image=self.n_players_image,
@@ -108,20 +109,31 @@ class SLICSegmenter(BaseSegmenter):
         self,
         coalitions_image: Optional[np.ndarray] = None,
         coalitions_text: Optional[np.ndarray] = None,
+        device: Optional[torch.device] = None,
     ) -> PhysicalMask:
         mask = PhysicalMask()
 
         if coalitions_image is not None:
-            mask.image_binary_mask = self._scatter_image_mask(coalitions_image)
+            mask.image_binary_mask = self._scatter_image_mask(
+                coalitions_image,
+                device=device,
+            )
 
         if coalitions_text is not None:
-            mask.text_attention_mask = self._build_text_attention_mask(coalitions_text)
+            mask.text_attention_mask = self._build_text_attention_mask(
+                coalitions_text,
+                device=device,
+            )
 
         return mask
 
     # ─── Internal helpers ─────────────────────────────────────────────────
 
-    def _scatter_image_mask(self, coalitions: np.ndarray) -> torch.Tensor:
+    def _scatter_image_mask(
+        self,
+        coalitions: np.ndarray,
+        device: Optional[torch.device] = None,
+    ) -> torch.Tensor:
         """
         Translate (N, K) bool coalitions → (N, C, H, W) float pixel masks.
 
@@ -129,13 +141,23 @@ class SLICSegmenter(BaseSegmenter):
             result[i, h, w] = coalition[i, label_map[h, w]]
         No Python loop over coalitions, pixels, or channels.
         """
-        coalition_t = torch.from_numpy(coalitions).bool()        # (N, K)
+        coalition_t = torch.as_tensor(coalitions, dtype=torch.bool, device=device)
+        label_map = self._label_map_for(coalition_t.device)
         # Advanced indexing: shape (N, H, W); see PyTorch broadcast rules
-        pixel_masks = coalition_t[:, self._label_map]            # (N, H, W) bool
+        pixel_masks = coalition_t[:, label_map]                  # (N, H, W) bool
         # Broadcast to channel dim, then materialise once as float
         return pixel_masks.unsqueeze(1).expand(
             -1, self.n_channels, -1, -1,
         ).float()
+
+    def _label_map_for(self, device: torch.device) -> torch.Tensor:
+        """Return the 2D SLIC label map on the target device."""
+        device = torch.device(device)
+        cached = self._label_map_by_device.get(device)
+        if cached is None:
+            cached = self._label_map.to(device=device, non_blocking=True)
+            self._label_map_by_device[device] = cached
+        return cached
 
     @staticmethod
     def _coerce_rgb_uint8(image, target_size: int) -> np.ndarray:

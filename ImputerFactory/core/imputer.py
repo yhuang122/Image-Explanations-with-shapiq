@@ -108,12 +108,7 @@ class ImageImputer:
         # Split coalitions into image and text parts
         coalitions_image = coalitions[:, :self.n_players_image]
         coalitions_text = coalitions[:, self.n_players_image:]
-
-        # Generate all masks upfront (vectorized)
-        physical_mask = self.segmenter.generate_masks(
-            coalitions_image=coalitions_image,
-            coalitions_text=coalitions_text,
-        )
+        device = next(self.model.parameters()).device
 
         # Batch loop
         batch_iters = n_coalitions // batch_size
@@ -127,9 +122,17 @@ class ImageImputer:
             if batch_idx < batch_iters:
                 actual_batch = batch_size
                 # Repeat the original 1-sample input to match batch size
-                inputs_batched = self._repeat_inputs(self.inputs_original, actual_batch)
-                # Slice the appropriate mask slice
-                mask_slice = self._slice_mask(physical_mask, start, end)
+                inputs_batched = self._repeat_inputs(
+                    self.inputs_original,
+                    actual_batch,
+                    device=device,
+                )
+                # Build this batch's mask on the model device.
+                mask_slice = self.segmenter.generate_masks(
+                    coalitions_image=coalitions_image[start:end],
+                    coalitions_text=coalitions_text[start:end],
+                    device=device,
+                )
                 # Apply mask
                 masked_inputs = self.masker.apply(inputs_batched, mask_slice)
                 # Forward
@@ -140,8 +143,16 @@ class ImageImputer:
 
             elif batch_left > 0:
                 # Last batch (smaller size)
-                inputs_batched = self._repeat_inputs(self.inputs_original, batch_left)
-                mask_slice = self._slice_mask(physical_mask, start, end)
+                inputs_batched = self._repeat_inputs(
+                    self.inputs_original,
+                    batch_left,
+                    device=device,
+                )
+                mask_slice = self.segmenter.generate_masks(
+                    coalitions_image=coalitions_image[start:end],
+                    coalitions_text=coalitions_text[start:end],
+                    device=device,
+                )
                 masked_inputs = self.masker.apply(inputs_batched, mask_slice)
                 outputs = self._model_forward(masked_inputs)
                 outputs_1d = self._extract_diagonal(outputs)
@@ -171,12 +182,7 @@ class ImageImputer:
 
         n_img = coalitions_image.shape[0]
         n_txt = coalitions_text.shape[0]
-
-        # Generate all masks upfront
-        physical_mask = self.segmenter.generate_masks(
-            coalitions_image=coalitions_image,
-            coalitions_text=coalitions_text,
-        )
+        device = next(self.model.parameters()).device
 
         # Image batch loop (outer)
         img_iters = n_img // batch_size
@@ -196,14 +202,28 @@ class ImageImputer:
             # Determine this image batch size and masks
             if img_batch_idx < img_iters:
                 img_bs = batch_size
-                img_slice_mask = self._slice_mask_img(physical_mask, img_start, img_end)
-                inputs_img_batched = self._repeat_inputs(self.inputs_original, img_bs)
+                img_slice_mask = self.segmenter.generate_masks(
+                    coalitions_image=coalitions_image[img_start:img_end],
+                    device=device,
+                )
+                inputs_img_batched = self._repeat_inputs(
+                    self.inputs_original,
+                    img_bs,
+                    device=device,
+                )
                 # Apply image mask
                 inputs_img_masked = self.masker.apply(inputs_img_batched, img_slice_mask)
             elif img_left > 0:
                 img_bs = img_left
-                img_slice_mask = self._slice_mask_img(physical_mask, img_start, img_end)
-                inputs_img_batched = self._repeat_inputs(self.inputs_original, img_bs)
+                img_slice_mask = self.segmenter.generate_masks(
+                    coalitions_image=coalitions_image[img_start:img_end],
+                    device=device,
+                )
+                inputs_img_batched = self._repeat_inputs(
+                    self.inputs_original,
+                    img_bs,
+                    device=device,
+                )
                 inputs_img_masked = self.masker.apply(inputs_img_batched, img_slice_mask)
             else:
                 break
@@ -214,7 +234,6 @@ class ImageImputer:
             for txt_batch_idx in range(txt_iters + 1):
                 txt_start = txt_batch_idx * batch_size
                 txt_end = txt_start + batch_size
-                txt_slice_mask = self._slice_mask_txt(physical_mask, txt_start, txt_end)
 
                 if txt_batch_idx < txt_iters:
                     txt_bs = batch_size
@@ -223,12 +242,16 @@ class ImageImputer:
                 else:
                     break
 
+                txt_slice_mask = self.segmenter.generate_masks(
+                    coalitions_text=coalitions_text[txt_start:txt_end],
+                    device=device,
+                )
+
                 if txt_bs == img_bs:
                     # Fast path: batch sizes match, just apply text mask
                     masked = self.masker.apply(inputs_img_masked, txt_slice_mask)
                 else:
                     # Edge case: txt batch ≠ img batch → reprocess with processor
-                    device = next(self.model.parameters()).device
                     raw = self._preprocess_batch(img_bs, txt_bs)
                     # Apply image mask
                     img_only = PhysicalMask(image_binary_mask=img_slice_mask.image_binary_mask)
@@ -245,7 +268,12 @@ class ImageImputer:
 
     # ─── Internal helpers ─────────────────────────────────────────────────
 
-    def _repeat_inputs(self, inputs: ProcessorOutput, batch_size: int) -> ProcessorOutput:
+    def _repeat_inputs(
+        self,
+        inputs: ProcessorOutput,
+        batch_size: int,
+        device: Optional[torch.device] = None,
+    ) -> ProcessorOutput:
         """Broadcast a 1-sample ProcessorOutput to batch_size.
 
         Keep pixel_values as a stride-0 view because it is the large tensor
@@ -253,10 +281,19 @@ class ImageImputer:
         Materialize text tensors; they are small, and some model internals may
         assume token tensors are contiguous.
         """
+        pixel_values = inputs.pixel_values
+        input_ids = inputs.input_ids
+        attention_mask = inputs.attention_mask
+
+        if device is not None:
+            pixel_values = pixel_values.to(device)
+            input_ids = input_ids.to(device)
+            attention_mask = attention_mask.to(device)
+
         return ProcessorOutput(
-            pixel_values=inputs.pixel_values.expand(batch_size, -1, -1, -1),
-            input_ids=inputs.input_ids.expand(batch_size, -1).clone(),
-            attention_mask=inputs.attention_mask.expand(batch_size, -1).clone(),
+            pixel_values=pixel_values.expand(batch_size, -1, -1, -1),
+            input_ids=input_ids.expand(batch_size, -1).clone(),
+            attention_mask=attention_mask.expand(batch_size, -1).clone(),
             model_type=inputs.model_type,
         )
 

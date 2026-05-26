@@ -47,20 +47,31 @@ class PatchSegmenter(BaseSegmenter):
         self,
         coalitions_image: Optional[np.ndarray] = None,
         coalitions_text: Optional[np.ndarray] = None,
+        device: Optional[torch.device] = None,
     ) -> PhysicalMask:
         mask = PhysicalMask()
 
         if coalitions_image is not None:
-            mask.image_binary_mask = self._generate_image_mask(coalitions_image)
+            mask.image_binary_mask = self._generate_image_mask(
+                coalitions_image,
+                device=device,
+            )
 
         if coalitions_text is not None:
-            mask.text_attention_mask = self._build_text_attention_mask(coalitions_text)
+            mask.text_attention_mask = self._build_text_attention_mask(
+                coalitions_text,
+                device=device,
+            )
 
         return mask
 
     # ─── Internal helpers ─────────────────────────────────────────────────
 
-    def _generate_image_mask(self, coalitions: np.ndarray) -> torch.Tensor:
+    def _generate_image_mask(
+        self,
+        coalitions: np.ndarray,
+        device: Optional[torch.device] = None,
+    ) -> torch.Tensor:
         """
         Convert patch-level coalition array to pixel-level binary mask.
 
@@ -70,7 +81,7 @@ class PatchSegmenter(BaseSegmenter):
         Returns:
             torch.Tensor (N, C, H, W) with 1=keep, 0=occlude.
         """
-        coalition_t = torch.from_numpy(coalitions)
+        coalition_t = torch.as_tensor(coalitions, dtype=torch.bool, device=device)
         n_coalitions = coalition_t.shape[0]
 
         # Expand each coalition value into a patch_size × patch_size block

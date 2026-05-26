@@ -39,6 +39,7 @@ class BaseSegmenter(ABC):
         self,
         coalitions_image: Optional[np.ndarray] = None,
         coalitions_text: Optional[np.ndarray] = None,
+        device: Optional[torch.device] = None,
     ) -> PhysicalMask:
         """
         Translate boolean coalition arrays into concrete physical masks.
@@ -58,7 +59,11 @@ class BaseSegmenter(ABC):
     # identical across all VLM segmenters. Centralised here so subclasses
     # only need to implement the image side.
 
-    def _build_text_attention_mask(self, coalitions: np.ndarray) -> torch.Tensor:
+    def _build_text_attention_mask(
+        self,
+        coalitions: np.ndarray,
+        device: Optional[torch.device] = None,
+    ) -> torch.Tensor:
         """
         Convert token-level coalitions to an attention mask matching the
         model's expected total length.
@@ -70,22 +75,25 @@ class BaseSegmenter(ABC):
             torch.IntTensor (N, text_total_length) — 1=attend, 0=ignore.
         """
         cfg = self.config
-        coalition_t = torch.from_numpy(coalitions)
+        coalition_t = torch.as_tensor(coalitions, dtype=torch.bool, device=device)
         n_coalitions = coalition_t.shape[0]
 
         if cfg.model_type in ("siglip", "siglip2"):
             # SigLIP / SigLIP2: right-pad with 1s after the valid tokens
             pad_len = cfg.text_total_length - cfg.n_players_text
             return torch.cat(
-                (coalition_t, torch.ones(n_coalitions, pad_len)),
+                (
+                    coalition_t,
+                    torch.ones(n_coalitions, pad_len, device=coalition_t.device),
+                ),
                 dim=1,
             ).int()
         if cfg.model_type == "clip":
             # CLIP: wrap with BOS=1, EOS=1
             return torch.cat(
-                (torch.ones(n_coalitions, 1),
+                (torch.ones(n_coalitions, 1, device=coalition_t.device),
                  coalition_t,
-                 torch.ones(n_coalitions, 1)),
+                 torch.ones(n_coalitions, 1, device=coalition_t.device)),
                 dim=1,
             ).int()
         raise ValueError(f"Unsupported model_type: {cfg.model_type}")

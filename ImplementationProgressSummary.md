@@ -12,7 +12,7 @@
 | | `ProcessorOutput` | ✅ Done | Standardized HuggingFace inputs wrapper |
 | **Segmenters** | `BaseSegmenter` | ✅ Done | Abstract: `get_layout()` + `generate_masks()` |
 | | `PatchSegmenter` | ✅ Done | Rigid grid, supports CLIP/SigLIP/SigLIP2 text masking |
-| | `SLICSegmenter` | 🔄 In progress | CNN perceptual superpixels via skimage SLIC; CPU index-map → GPU scatter |
+| | `SLICSegmenter` | ✅ Done | CNN perceptual superpixels via skimage SLIC; CPU index-map → GPU scatter |
 | | `GradientGuidedSegmenter` | 🔬 Future | Future exploration: gradient extraction + watershed layout |
 | | `AdaptiveSegmenter` | 🔬 Future | Future exploration: coarse-to-fine subdivision logic |
 | | `HybridSegmenter` | ❌ Out of scope | Not planned for current phase |
@@ -134,7 +134,7 @@
 
 | # | Feature | Details | Priority | Status |
 |---|---|---|---|---|
-| B2.1 | `SLICSegmenter` | CPU: skimage SLIC → 2D index map. GPU: scatter coalition bits via index map | **High** | 🔄 In progress / implementation draft done, validation pending
+| B2.1 | `SLICSegmenter` | CPU: skimage SLIC → 2D index map. GPU: scatter coalition bits via index map | **High** | ✅ Done
 | B2.2 | `GradientGuidedSegmenter` | Future exploration: gradient map → skimage watershed → non-uniform static layout | 🔬 Future | ⬜ Not started |
 | B2.3 | `AdaptiveSegmenter` | Future exploration: coarse grid → score-driven subdivision → feedback loop. Requires `is_stateful=True` protocol | 🔬 Future | ⬜ Not started |
 
