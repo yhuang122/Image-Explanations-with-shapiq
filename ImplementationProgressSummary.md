@@ -142,11 +142,11 @@
 
 After B2.1 is complete, verify the SLICSegmenter + VisionMeanMasker pipeline works on CNN-based CLIP variants. Unlike ViT models where patches are rigid grids, CNN backbones process the full spatial input — SLIC superpixels are required to avoid OOD artifacts.
 
-| # | Model | Backbone | Key Check |
-|---|---|---|---|
-| B2a.1 | `openai/clip-rn50` | ResNet-50 | Correct model detection (should still return `"clip"`), SLIC layout produced, no crash |
-| B2a.2 | `openai/clip-rn101` | ResNet-101 | Same as above, verify memory usage |
-| B2a.3 | `openai/clip-rn50x4` | ResNet-50×4 | Larger ResNet variant — validate throughput |
+| # | Model | Backbone | Key Check | Status |
+|---|---|---|---|---|
+| B2a.1 | `openai/clip-rn50` | ResNet-50 | Correct model detection (should still return `"clip"`), SLIC layout produced, no crash | ⬜ Not started |
+| B2a.2 | `openai/clip-rn101` | ResNet-101 | Same as above, verify memory usage | ⬜ Not started |
+| B2a.3 | `openai/clip-rn50x4` | ResNet-50×4 | Larger ResNet variant — validate throughput | ⬜ Not started |
 
 **Integration check**: Run `example.ipynb` equivalent with CLIP-ResNet + `segmenter="slic"`. Expected: AID values within ±5% of ViT-based results (SLIC superpixels may yield different but valid attributions). If the workflow fails (crash / NaN / OOM), B1 fixes take priority.
 
