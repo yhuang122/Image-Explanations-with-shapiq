@@ -42,7 +42,5 @@ def get_masker(name: str) -> type:
 
 from .vision_mean import VisionMeanMasker
 from .text_attention import TextAttentionMasker
-from .crossmodal_composite import CrossModalCompositeMasker
-# Backward compat
-from .mean import CrossModalMeanMasker
+from .crossmodal_composite import CrossModalMeanMasker
 

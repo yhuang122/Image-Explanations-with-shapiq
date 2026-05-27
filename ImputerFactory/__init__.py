@@ -11,7 +11,7 @@ Exports:
     PatchSegmenter            — Rigid-grid segmenter (VLM baseline).
     VisionMeanMasker          — Pure image occlusion (multiplicative mask).
     TextAttentionMasker       — Pure text occlusion (attention_mask swap).
-    CrossModalCompositeMasker — Composite: VisionMeanMasker + TextAttentionMasker.
+    CrossModalMeanMasker — Composite: VisionMeanMasker + TextAttentionMasker.
 """
 
 from .factory import ImageImputerFactory
@@ -21,5 +21,5 @@ from .segmenters.patch import PatchSegmenter
 from .maskers import (
     VisionMeanMasker,
     TextAttentionMasker,
-    CrossModalCompositeMasker,
+    CrossModalMeanMasker,
 )

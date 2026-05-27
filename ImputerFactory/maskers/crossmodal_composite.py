@@ -1,5 +1,5 @@
 """
-CrossModalCompositeMasker — Composite masker for Vision-Language Models.
+CrossModalMeanMasker — Composite masker for Vision-Language Models.
 
 Follows the Composite Pattern: internally instantiates two atomic maskers
 (VisionMeanMasker + TextAttentionMasker) and delegates image/text occlusion
@@ -13,8 +13,8 @@ from ImputerFactory.data import PhysicalMask, ProcessorOutput
 from . import register_masker
 
 
-@register_masker("crossmodal")
-class CrossModalCompositeMasker(BaseMasker):
+@register_masker("crossmodal_mean")
+class CrossModalMeanMasker(BaseMasker):
     """
     Cross-modal occlusion orchestrator for VLMs.
 

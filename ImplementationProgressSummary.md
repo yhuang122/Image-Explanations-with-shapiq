@@ -19,11 +19,10 @@
 | **Maskers** | `BaseMasker` | ✅ Done | Abstract: `apply(ProcessorOutput, PhysicalMask)` |
 | | `VisionMeanMasker` | ✅ Done | Pure image occlusion via multiplicative binary mask (out-of-place) |
 | | `TextAttentionMasker` | ✅ Done | Pure text occlusion via attention_mask replacement |
-| | `CrossModalCompositeMasker` | ✅ Done | Composite Pattern: delegates to VisionMeanMasker + TextAttentionMasker |
-| | `CrossModalMeanMasker` | ⚠️ Deprecated | Kept for backward compat; prefer CrossModalCompositeMasker |
+| | `CrossModalMeanMasker` | ✅ Done | Composite Pattern: delegates to VisionMeanMasker + TextAttentionMasker |
 | | `AttentionMasker` | ⏳ Stub | Needs negative-infinity self-attention injection |
 | **Core** | `ImageImputer` | ✅ Done | `forward_1d` + `forward_crossmodal` with batching & device mgmt |
-| **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalCompositeMasker |
+| **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalMeanMasker |
 | **Adapters** | `TensorOps` / `TorchOps` | ⏳ Stub | Interface defined; PyTorch-only (JAX out of scope) |
 | **Integration** | `VisionLanguageGame` | ✅ Done | Thin adapter: delegates to Imputer, ~75 lines |
 

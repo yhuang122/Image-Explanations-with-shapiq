@@ -28,7 +28,7 @@
   - `apply(processor_output, physical_mask)` → returns `ProcessorOutput` (modified)
 - **Must NOT**: access `model`, call `processor`, generate masks from coalitions
 - **Must**: clone inputs before mutation (never mutate the original)
-- **Examples**: `VisionMeanMasker` (pixel multiply), `TextAttentionMasker` (attention swap), `CrossModalCompositeMasker` (composite of the two), `AttentionMasker` (negative-infinity injection)
+- **Examples**: `VisionMeanMasker` (pixel multiply), `TextAttentionMasker` (attention swap), `CrossModalMeanMasker` (composite of the two), `AttentionMasker` (negative-infinity injection)
 
 ### ImageImputer
 **Sole responsibility**: Orchestration — coordinate Segmenter → Masker → Model forward.
@@ -160,7 +160,7 @@ Four dataclasses serve as the universal data protocol:
 - Never touches `pixel_values` — safe to compose
 - Serves text-only models or cross-modal pipelines
 
-### `ImputerFactory/maskers/crossmodal_composite.py` — CrossModalCompositeMasker
+### `ImputerFactory/maskers/crossmodal_composite.py` — CrossModalMeanMasker
 - **Sole responsibility**: Composite Pattern — orchestrates VisionMeanMasker + TextAttentionMasker
 - Internally instantiates both atomic maskers; `apply()` delegates image → Vision, then text → Text
 - Owns no low-level tensor math — purely an orchestration layer

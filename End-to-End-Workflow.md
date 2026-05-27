@@ -56,7 +56,7 @@ factory.build(model, processor, input_image, input_text)
 │     └─ Produces SpatialLayout(n_players_image=49, n_players_text=8, ...)
 │
 ├─ 7. _create_masker(config)
-│     └─ get_masker("crossmodal") → CrossModalCompositeMasker (registry lookup)
+│     └─ get_masker("crossmodal_mean") → CrossModalMeanMasker (registry lookup)
 │         └─ Internally: VisionMeanMasker + TextAttentionMasker
 │
 ├─ 8. Build ProcessorOutput + assemble ImageImputer
@@ -72,7 +72,7 @@ factory.build(model, processor, input_image, input_text)
 | Component | Instance | Key parameters |
 |---|---|---|
 | Segmenter | `PatchSegmenter` | grid=7×7, n_players_image=49, resolved via registry |
-| Masker | `CrossModalCompositeMasker` | VisionMeanMasker + TextAttentionMasker (registry lookup) |
+| Masker | `CrossModalMeanMasker` | VisionMeanMasker + TextAttentionMasker (registry lookup) |
 | Layout | `SpatialLayout` | n_players=57 (49 img + 8 txt) |
 | Inputs | `ProcessorOutput` | 1-sample preprocessed result |
 
