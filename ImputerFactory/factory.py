@@ -24,9 +24,10 @@ class ImageImputerFactory:
         imputer = factory.build(model, processor, input_image, input_text)
 
     Segmenter options:
-        - None           → auto: PatchSegmenter for ViT, SLICSegmenter for CNN
-        - "patch"        → PatchSegmenter (rigid grid, baseline for ViT)
-        - "slic"         → SLICSegmenter (perceptual superpixels, required for CNN)
+        - None              → auto: PatchSegmenter for ViT, SLICSegmenter for CNN
+        - "patch"           → PatchSegmenter (rigid grid, baseline for ViT)
+        - "slic"            → SLICSegmenter (perceptual superpixels, required for CNN)
+        - "gradient_guided" → GradientGuidedSegmenter (saliency-guided, opt-in)
 
     Masker options:
         - None / "crossmodal_mean" → CrossModalMeanMasker (baseline for VLMs)
@@ -100,6 +101,13 @@ class ImageImputerFactory:
         if config.segmenter == "slic":
             # SLIC needs the raw image to plan superpixels (CPU once).
             config.segmenter_kwargs.setdefault("image_array", input_image)
+        if config.segmenter == "gradient_guided":
+            # GradientGuidedSegmenter needs model/processor/image/text for
+            # the forward+backward pass that extracts the saliency map.
+            config.segmenter_kwargs.setdefault("model", model)
+            config.segmenter_kwargs.setdefault("processor", processor)
+            config.segmenter_kwargs.setdefault("image", input_image)
+            config.segmenter_kwargs.setdefault("text", input_text)
         segmenter = self._create_segmenter(config)
         # SLIC determines the real player count at __init__; sync config.
         config.n_players_image = segmenter.get_layout().n_players_image

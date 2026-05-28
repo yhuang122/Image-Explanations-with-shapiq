@@ -42,3 +42,4 @@ def get_segmenter(name: str) -> type:
 
 from .patch import PatchSegmenter
 from .slic import SLICSegmenter
+from .gradient_guided import GradientGuidedSegmenter

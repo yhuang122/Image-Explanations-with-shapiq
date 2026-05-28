@@ -69,11 +69,14 @@ class ImageImputer:
         self.patch_size = config.patch_size
         self.n_channels = config.n_channels
         self.grid_size = config.grid_size
-        self.n_players_image = config.n_players_image
         self.model_type = config.model_type
 
         # Layout from segmenter
         self.layout: SpatialLayout = segmenter.get_layout()
+
+    @property
+    def n_players_image(self) -> int:
+        return self.layout.n_players_image
 
     @property
     def n_players_text(self) -> int:
