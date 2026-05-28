@@ -1,6 +1,6 @@
 # ImageImputer — Implementation Progress Summary
 
-> Last updated: 2026-05-26
+> Last updated: 2026-05-27
 
 ## Implementation Progress Summary
 
@@ -13,7 +13,7 @@
 | **Segmenters** | `BaseSegmenter` | ✅ Done | Abstract: `get_layout()` + `generate_masks()` |
 | | `PatchSegmenter` | ✅ Done | Rigid grid, supports CLIP/SigLIP/SigLIP2 text masking |
 | | `SLICSegmenter` | ✅ Done | CNN perceptual superpixels via skimage SLIC; CPU index-map → GPU scatter |
-| | `GradientGuidedSegmenter` | 🔬 Future | Future exploration: gradient extraction + watershed layout |
+| | `GradientGuidedSegmenter` | ✅ Done | Future exploration: gradient extraction + watershed layout |
 | | `AdaptiveSegmenter` | 🔬 Future | Future exploration: coarse-to-fine subdivision logic |
 | | `HybridSegmenter` | ❌ Out of scope | Not planned for current phase |
 | **Maskers** | `BaseMasker` | ✅ Done | Abstract: `apply(ProcessorOutput, PhysicalMask)` |
