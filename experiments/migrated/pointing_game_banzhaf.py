@@ -27,7 +27,7 @@ import torch
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f'- Device: {DEVICE}', flush=True)
 torch.set_float32_matmul_precision("high")
-from transformers import CLIPProcessor, CLIPModel, AutoModel, AutoProcessor
+from transformers import CLIPProcessor, CLIPModel
 
 import os
 if not os.path.exists(PATH_OUTPUT):
@@ -49,48 +49,37 @@ import matplotlib.pyplot as plt
 
 with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
 
-    if "siglip" in MODEL_NAME:
-        model = AutoModel.from_pretrained(MODEL_NAME)
-        processor = AutoProcessor.from_pretrained(MODEL_NAME)
-    elif "clip" in MODEL_NAME:
-        model = CLIPModel.from_pretrained(MODEL_NAME)
-        processor = CLIPProcessor.from_pretrained(MODEL_NAME)
+    model = CLIPModel.from_pretrained(MODEL_NAME)
     model.to(DEVICE)
+    processor = CLIPProcessor.from_pretrained(MODEL_NAME)
     input_text = CLASS_LABELS.replace("_", " ")
     factory = ImageImputerFactory()
 
     for i in range(50):
-        if "siglip2" not in MODEL_NAME and "siglip" in MODEL_NAME and "husky" in input_text:
-            break
         input_image = Image.open(os.path.join(PATH_INPUT, f'{i}.jpg'))
-
         imputer = factory.build(model, processor, input_image, input_text, segmenter=None, masker=None)
         game = VisionLanguageGame(
             imputer,
             batch_size=BATCH_SIZE
         )
         fixlip = src.fixlip.FIxLIP(
-            n_players_image=game.n_players_image, 
-            n_players_text=game.n_players_text, 
+            n_players=game.n_players, 
             mode=MODE,
             max_order=2, 
             p=P_SAMPLER,
             random_state=RANDOM_STATE
         )
-
-        if game.n_players_image == 49 or game.n_players_image == 64:
+        
+        if game.n_players_image == 49:
             top_k = 5 * game.n_players_text
             interaction_lookup = None
-        elif game.n_players_image == 196 or game.n_players_image == 256:
+        elif game.n_players_image == 196:
             top_k = 20 * game.n_players_text
             interaction_lookup = src.utils.create_crossmodal_interaction_lookup(game.n_players_image, game.n_players_text)
 
-        budget_text = min(64, 2 ** game.n_players_text)
-        budget_image = min(2 ** 18, int(BUDGET / budget_text))
-        interaction_values = fixlip.approximate_crossmodal(
+        interaction_values = fixlip.approximate(
             game=game, 
-            budget_text=budget_text,
-            budget_image=budget_image,
+            budget=BUDGET,
             interaction_lookup=interaction_lookup
         )
         interaction_values.save(os.path.join(PATH_OUTPUT, f'iv_order2_{i}.pkl'))
@@ -99,16 +88,9 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
         banzhaf_values.save(os.path.join(PATH_OUTPUT, f'iv_order1_{i}.pkl'))
 
         ## visualize explanations
-        if imputer.model_type == "siglip":
-            text_tokens = input_text.split(" ")
-        else:
-            text_tokens = game.inputs.tokens()
-            if "siglip2" in MODEL_NAME:
-                text_tokens = text_tokens[0:game.n_players_text]
-                text_tokens = [token.replace('▁', '') for token in text_tokens]
-            elif "clip" in MODEL_NAME:
-                text_tokens = text_tokens[1:-1]
-                text_tokens = [token.replace('</w>', '') for token in text_tokens]
+        text_tokens = game.inputs.tokens()
+        text_tokens = text_tokens[1:-1]
+        text_tokens = [token.replace('</w>', '') for token in text_tokens]
         assert len(text_tokens) == game.n_players_text
         players_text = list(range(game.n_players_image, game.n_players))
         assert game.n_players == interaction_values.n_players == max(players_text) + 1
@@ -145,6 +127,6 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
         fig.savefig(os.path.join(PATH_OUTPUT, f'ex_order1_{i}.png'), bbox_inches='tight')
         plt.close(fig)
         ##
-        run.config['budget_actual'] = budget_text * budget_image
+        run.config['budget_actual'] = BUDGET
 
 wandb.finish()

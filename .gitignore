@@ -3,6 +3,7 @@
 # local examples and test data
 examples/
 data/demo_dog.jpg
+experiments/wandb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
