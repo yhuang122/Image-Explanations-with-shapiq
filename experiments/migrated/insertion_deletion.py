@@ -88,7 +88,7 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/aid', config=args)
 
         input_image = d['jpg']
         input_text = d['txt'].split("\n")[df_metadata.loc[i, "best_text_id"].item()]
-        imputer = factory.build(model, processor, input_image, input_text)
+        imputer = factory.build(model, processor, input_image, input_text, segmenter=None, masker=None)
         game = VisionLanguageGame(imputer, batch_size=BATCH_SIZE)
 
         for mode in ['shapley', 'banzhaf/0.3', 'banzhaf/0.5', 'banzhaf/0.7']:

@@ -139,7 +139,7 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=arg
         print(f'iter: {n_iter}/{STOP - START}', flush=True)
         input_image = d['jpg']
         input_text = d['txt'].split("\n")[df_metadata.loc[i, "best_text_id"].item()]
-        imputer = factory.build(model_huggingface, processor_huggingface, input_image, input_text)
+        imputer = factory.build(model_huggingface, processor_huggingface, input_image, input_text, segmenter=None, masker=None)
         game_huggingface = VisionLanguageGame(imputer, batch_size=BATCH_SIZE)
         game_openai = src.game_openai.CLIPGame(
             model_openai, processor_openai,
