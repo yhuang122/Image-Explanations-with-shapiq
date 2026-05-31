@@ -42,9 +42,7 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROJECT_SRC = PROJECT_ROOT / "src"
 sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_SRC))
 import src
 from ImputerFactory import ImageImputerFactory
 from Game import VisionLanguageGame
