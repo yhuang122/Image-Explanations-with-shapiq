@@ -100,7 +100,14 @@ class GradientGuidedSegmenter(BaseSegmenter):
         self._saliency = saliency
 
         # 5. SLIC superpixels on the saliency map
-        n_target = self.grid_size * self.grid_size
+        # For CNN models grid_size is 0; fall back to a sensible default.
+        kwargs_n_seg = config.segmenter_kwargs.get("n_segments", None) if hasattr(config, "segmenter_kwargs") else None
+        if self.grid_size > 0:
+            n_target = self.grid_size * self.grid_size
+        elif kwargs_n_seg is not None:
+            n_target = int(kwargs_n_seg)
+        else:
+            n_target = 49  # same default as SLICSegmenter
         saliency_rgb = np.stack([saliency] * 3, axis=-1)
         region_labels = _skimage_slic(
             saliency_rgb,
@@ -120,6 +127,12 @@ class GradientGuidedSegmenter(BaseSegmenter):
         self.n_players_image = int(unique_ids.size)
         self._label_map = torch.from_numpy(label_map)  # CPU (H, W) int64
         self._label_map_by_device = {torch.device("cpu"): self._label_map}
+
+        # Recompute grid_size for the layout to reflect actual player count
+        grid_side = int(np.sqrt(self.n_players_image))
+        self.grid_size = grid_side + 1 if grid_side * grid_side < self.n_players_image else grid_side
+        if self.grid_size < 1:
+            self.grid_size = 1
 
         self._layout = SpatialLayout(
             n_players_image=self.n_players_image,
