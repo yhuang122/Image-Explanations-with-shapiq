@@ -272,12 +272,28 @@ def plot_image_and_text_together(
     # ── Interaction curves ──────────────────────────────────────────────
     if iv.max_order >= 2 and plot_interactions:
         iv_second_order = iv.get_n_order(order=2, min_order=2, max_order=2)
-        top_interactions = sort_interactions(
+        
+        # 1. 获取所有排序后的二维交互
+        all_2nd_order = sort_interactions(
             iv_second_order, reverse=True, sort_by_abs=sort_by_abs
-        )[:top_k]
+        )
+
+        # 2. 修正：增设二分图掩码，严格过滤出跨模态（图像 ↔ 文本）交互
+        # 剔除纯图像内部 (Image-Image) 或纯文本内部 (Text-Text) 的噪声交互
+        cross_modal_interactions = []
+        for interaction_data in all_2nd_order:
+            interaction = interaction_data[0]
+            if len(interaction) == 2:
+                p1, p2 = interaction
+                # 逻辑 XOR 校验：必须仅有一个节点索引小于 n_players_image
+                if (p1 < n_players_image) != (p2 < n_players_image):
+                    cross_modal_interactions.append(interaction_data)
+        
+        # 3. 在纯净的跨模态池中截取前 top_k
+        top_interactions = cross_modal_interactions[:top_k]
 
         if debug:
-            print(f"Top {top_k} interactions: {top_interactions}")
+            print(f"Top {top_k} cross-modal interactions: {top_interactions}")
 
         colors = interactions_to_color(iv, max_value=max_value)
 
@@ -285,8 +301,7 @@ def plot_image_and_text_together(
         for interaction in top_interactions:
             interaction = interaction[0]
             
-            # Fix: second safety check — drop interaction pairs whose
-            # players were filtered out (not in `positions`).
+            # 4. 坐标系安全校验：确保连接节点没有被 Padding 规则剔除
             if not all(p in positions for p in interaction):
                 continue
                 
