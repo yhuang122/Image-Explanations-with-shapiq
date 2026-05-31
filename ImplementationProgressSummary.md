@@ -79,7 +79,7 @@
 |---|---|---|---|---|
 | A1.1 | `experiments/faithfulness.py` | Migrate to `Game.game_huggingface` API | Same faithfulness metrics as `src` baseline (±1e-4) | ✅ Done |
 | A1.2 | `experiments/insertion_deletion.py` | Migrate to `Game.game_huggingface` API | Same AID curve as `src` baseline | ✅ Done |
-| A1.3 | `experiments/insertion_deletion_siglip.py` | Migrate + verify SigLIP support | Correct model type detection, no crash | ⬜ Not started |
+| A1.3 | `experiments/insertion_deletion_siglip.py` | Migrate + verify SigLIP support | Correct model type detection, no crash | 🔄 In progress |
 | A1.4 | `experiments/pointing_game_banzhaf.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
 | A1.5 | `experiments/pointing_game_shapley.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
 | A1.6 | `experiments/pointing_game_crossmodal.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
@@ -161,14 +161,16 @@ After B2.1 is complete, verify the SLICSegmenter + VisionMeanMasker pipeline wor
 |---|---|---|---|
 | B4.1 | `TorchOps` extraction | Move inline PyTorch ops from Imputer/Segmenter into adapter | ⬜ Not started |
 
-#### B6. Evaluation Experiment Infrastructure
+#### B6. Evaluation Infrastructure — Extract Reusable Libraries
 
-> A1.2 already completed the API migration for insertion_deletion.py. B6 covers the broader pipeline: running experiments at scale, producing AID curves, and building reusable evaluation tooling.
+> **B6 does NOT run independent experiments.** Its job is to extract shared evaluation logic (AID curve computation, faithfulness metrics, plotting) from **already-migrated** Team A experiments into reusable libraries. Team A owns the experiment scripts; B6 owns the tooling those scripts import.
+>
+> **Boundary rule**: If a change touches `experiments/*.py`, it belongs to Team A (migration). If it touches a new shared lib imported by multiple experiments, it belongs to B6.
 
-| # | Task | Details | Status |
-|---|---|---|---|
-| B6.1 | Insertion/Deletion evaluation pipeline | Build reusable AID curve pipeline on MSCOCO subset (10 samples). Validate AID values vs `src` baseline (±1e-4). Produce normalized AID curves for all mode/order combos | 🔄 Planning |
-| B6.2 | Faithfulness evaluation suite | Build reusable faithfulness evaluation harness. Compare metrics before/after migration | ⬜ Not started |
+| # | Task | Details | Blocked by | Status |
+|---|---|---|---|---|
+| B6.1 | AID curve library | Extract reusable AID computation + plotting from migrated A1.2 (`insertion_deletion.py`) and A1.7 (`explain_mscoco.py`). Must NOT re-implement experiment logic — only factor out common code | A1.2 ✅ / A1.7 ⬜ | 🔄 Planning |
+| B6.2 | Faithfulness evaluation library | Extract reusable faithfulness metrics + harness from migrated A1.1 (`faithfulness.py`). Compare metrics before/after migration | A1.1 ✅ | ⬜ Not started |
 
 | # | Task | Details | Status |
 |---|---|---|---|
@@ -206,8 +208,12 @@ A1.1–A1.8 (migrate experiments)    B2.1 SLICSegmenter
     └─ A4 (feedback) ─────────────► B2a CLIP-ResNet validation
                                         │
                                         ▼
-                                    B3, B5, B6 (extensions)
+                                    B3, B5 (extensions)
                                     B2.2–B2.3 (future)
+                                        │
+                    ┌───────────────────┘
+                    ▼
+            B6 (extract libs from A1.1, A1.2, A1.7)
 ```
 
 | Dependency | Blocker | Blocked by |
@@ -216,6 +222,8 @@ A1.1–A1.8 (migrate experiments)    B2.1 SLICSegmenter
 | B2a (ResNet validation) | B2.1 (SLIC) complete | B2.1 |
 | B2.2–B2.3 (GGS/AS) | N/A (future exploration) | Future milestone |
 | A3 (cross-model) | A1 completion | All experiments pass |
+| B6.1 (AID curve lib) | A1.2 + A1.7 migrated | Team A migration |
+| B6.2 (faithfulness lib) | A1.1 migrated | Team A migration |
 
 ---
 
@@ -225,8 +233,8 @@ A1.1–A1.8 (migrate experiments)    B2.1 SLICSegmenter
 |---|---|---|---|
 | W1 | A1.1–A1.4, A2.1 | B1 (bug fixes), B4.1 (TorchOps) | Experiments 1–4 pass |
 | W2 | A1.5–A1.8, A2.2–A2.3 | B2.1 (SLICSegmenter) | All 8 experiments pass |
-| W3 | A3.1–A3.5 (cross-model) | B2a (CLIP-ResNet validation), B6.1 (insertion/deletion curve) | SLIC + ResNet workflow green |
-| W4 | A4 (feedback loop) | B6.2 (faithfulness suite) | Feature freeze, integration test |
+| W3 | A3.1–A3.5 (cross-model) | B2a (CLIP-ResNet validation) | SLIC + ResNet workflow green |
+| W4 | A4 (feedback loop) | B6.1–B6.2 (extract eval libs from A1.1/A1.2/A1.7) | Feature freeze, integration test |
 
 ---
 
