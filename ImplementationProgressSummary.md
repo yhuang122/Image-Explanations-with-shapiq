@@ -83,7 +83,7 @@
 | A1.4 | `experiments/pointing_game_banzhaf.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
 | A1.5 | `experiments/pointing_game_shapley.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
 | A1.6 | `experiments/pointing_game_crossmodal.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
-| A1.7 | `experiments/explain_mscoco.py` | Migrate to `Game` API | Same top-k interaction overlap | ⬜ Not started |
+| A1.7 | `experiments/explain_mscoco.py` | Migrate to `Game` API | Same top-k interaction overlap | 🔄 In progress |
 | A1.8 | `experiments/explain_mscoco_siglip.py` | Migrate + verify SigLIP2 support | SigLIP2 model loads and runs | ⬜ Not started |
 
 > **Notes:**
