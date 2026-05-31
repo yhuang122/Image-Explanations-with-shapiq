@@ -29,6 +29,15 @@ class ImageImputerFactory:
         - "slic"            → SLICSegmenter (perceptual superpixels, required for CNN)
         - "gradient_guided" → GradientGuidedSegmenter (saliency-guided, opt-in)
 
+    Segmenter kwargs (forwarded to segmenter constructor):
+        - For "slic":       optionally override n_segments, compactness, sigma.
+        - For "gradient_guided": optionally override model/processor/image/text
+          used for the saliency forward pass.
+        - For "patch":      no meaningful kwargs.
+        The factory auto-fills the required defaults (e.g. image_array for SLIC,
+        model/processor/image/text for gradient-guided); you only need to supply
+        overrides to change default behavior.
+
     Masker options:
         - None / "crossmodal_mean" → CrossModalMeanMasker (baseline for VLMs)
         - "vision"           → VisionMeanMasker (image-only)
@@ -42,6 +51,7 @@ class ImageImputerFactory:
         input_image: Any,
         input_text: str,
         segmenter: Optional[str] = None,
+        segmenter_kwargs: Optional[dict] = {},
         masker: Optional[str] = None,
         use_amp: bool = False,
     ) -> ImageImputer:
@@ -54,6 +64,13 @@ class ImageImputerFactory:
             input_image: PIL Image or path.
             input_text: Text string.
             segmenter: Optional segmenter strategy ("patch", "slic").
+            segmenter_kwargs: Optional dict forwarded to the segmenter
+                constructor. Keys depend on the segmenter type:
+                - "patch": no meaningful keys.
+                - "slic":  "n_segments", "compactness", "sigma", etc.
+                - "gradient_guided": "model", "processor", "image", "text".
+                The factory injects required defaults before instantiation
+                (e.g. image_array for SLIC), so you only need overrides.
             masker: Optional masker strategy ("crossmodal_mean", "vision", "text").
             use_amp: If True, model.forward runs under torch.autocast(fp16)
                 on CUDA. Useful for ViT-L/14 with large coalitions.
@@ -89,7 +106,7 @@ class ImageImputerFactory:
             text_total_length=text_total_length,
             segmenter=segmenter,
             masker=masker,
-            segmenter_kwargs={},  # populated by segmenter strategies in future
+            segmenter_kwargs=segmenter_kwargs,  # populated by segmenter strategies in future
             use_amp=use_amp,
         )
 

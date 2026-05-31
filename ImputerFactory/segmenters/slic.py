@@ -67,7 +67,7 @@ class SLICSegmenter(BaseSegmenter):
                 "(the raw input image). The Factory populates this when "
                 "segmenter='slic' is selected."
             )
-        n_segments_target = int(kwargs.get("n_segments", 49))
+        n_segments = int(kwargs.get("n_segments", 49))
         compactness = float(kwargs.get("compactness", 10.0))
         sigma = float(kwargs.get("sigma", 0.0))
 
@@ -75,7 +75,7 @@ class SLICSegmenter(BaseSegmenter):
         image_rgb = self._coerce_rgb_uint8(image_array, self.image_size)
         raw_labels = _skimage_slic(
             image_rgb,
-            n_segments=n_segments_target,
+            n_segments=n_segments,
             compactness=compactness,
             sigma=sigma,
             start_label=0,

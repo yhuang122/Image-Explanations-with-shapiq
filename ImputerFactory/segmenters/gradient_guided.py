@@ -100,26 +100,26 @@ class GradientGuidedSegmenter(BaseSegmenter):
         self._saliency = saliency
 
         # 5. SLIC superpixels on the saliency map
-        # For CNN models grid_size is 0; fall back to a sensible default.
-        kwargs_n_seg = config.segmenter_kwargs.get("n_segments", None) if hasattr(config, "segmenter_kwargs") else None
-        if self.grid_size > 0:
-            n_target = self.grid_size * self.grid_size
-        elif kwargs_n_seg is not None:
-            n_target = int(kwargs_n_seg)
+        # Priority: segmenter_kwargs > grid-based > hardcoded default.
+        n_segments_kw = config.segmenter_kwargs.get("n_segments", None)
+        if n_segments_kw is not None:
+            n_segments = int(n_segments_kw)
+        elif self.grid_size > 0:
+            n_segments = self.grid_size * self.grid_size
         else:
-            n_target = 49  # same default as SLICSegmenter
+            n_segments = 49  # same default as SLICSegmenter
         saliency_rgb = np.stack([saliency] * 3, axis=-1)
         region_labels = _skimage_slic(
             saliency_rgb,
-            n_segments=n_target,
+            n_segments=n_segments,
             compactness=5.0,
             start_label=0,
             channel_axis=-1,
         )
 
         # Safety: clamp in case SLIC produces more regions than requested
-        if region_labels.max() >= n_target:
-            region_labels = np.clip(region_labels, 0, n_target - 1)
+        if region_labels.max() >= n_segments:
+            region_labels = np.clip(region_labels, 0, n_segments - 1)
 
         # Remap to contiguous [0, K) like SLICSegmenter
         unique_ids, packed = np.unique(region_labels, return_inverse=True)
