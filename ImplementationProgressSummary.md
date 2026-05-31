@@ -84,7 +84,7 @@
 | A1.5 | `experiments/pointing_game_shapley.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
 | A1.6 | `experiments/pointing_game_crossmodal.py` | Migrate to `Game` API | Same PGR accuracy | ✅ Done |
 | A1.7 | `experiments/explain_mscoco.py` | Migrate to `Game` API | Same top-k interaction overlap | ✅ Done |
-| A1.8 | `experiments/explain_mscoco_siglip.py` | Migrate + verify SigLIP2 support | SigLIP2 model loads and runs | 🔄 In progress |
+| A1.8 | `experiments/explain_mscoco_siglip.py` | Migrate + verify SigLIP2 support | SigLIP2 model loads and runs | ✅ Done |
 
 > **Notes:**
 > - **A1.1** (`migrated/faithfulness.py`): HuggingFace model hardcoded to device 0 and OpenAI CLIP to device 1 (was the same logic in the inital pipelien) — two models run simultaneously on different GPUs to avoid OOM. When file moved back to experiements/ change PROJECT_ROOT reference from parent[2] to parent[1].
@@ -94,7 +94,7 @@
 
 | # | Task | Details | Status |
 |---|---|---|---|
-| A2.1 | Build comparison harness | Script that runs same coalitions through `src` Game and `Game` Game, diffing outputs | ⬜ Not started |
+| A2.1 | Build comparison harness | Script that runs same coalitions through `src` Game and `Game` Game, diffing outputs | 🔄 In progress  |
 | A2.2 | Snapshot baseline | Save reference outputs from all 8 experiments using `src` path | ⬜ Not started |
 | A2.3 | CI-style gate | Exit code ≠ 0 if any experiment deviates > 1e-4 from baseline | ⬜ Not started |
 
