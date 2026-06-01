@@ -210,7 +210,11 @@ class ImageImputerFactory:
             kwargs["max_length"] = 64
         elif model_type == "clip":
             kwargs["padding"] = True
-        return processor(**kwargs)
+        outputs = processor(**kwargs)
+        # SigLIP tokenizer does not return attention_mask; derive it
+        if "attention_mask" not in outputs:
+            outputs["attention_mask"] = (outputs["input_ids"] != 1).long()
+        return outputs
 
     @staticmethod
     def _count_text_players(inputs: dict, model_type: str) -> int:

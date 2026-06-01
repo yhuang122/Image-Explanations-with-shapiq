@@ -137,10 +137,14 @@ class ProcessorOutput:
     @classmethod
     def from_hf_processor(cls, inputs: dict, model_type: str) -> "ProcessorOutput":
         """Create from a HuggingFace processor output dict."""
+        attention_mask = inputs.get("attention_mask")
+        if attention_mask is None:
+            # SigLIP tokenizer does not return attention_mask; derive it
+            attention_mask = (inputs["input_ids"] != 1).long()
         return cls(
             pixel_values=inputs["pixel_values"],
             input_ids=inputs["input_ids"],
-            attention_mask=inputs["attention_mask"],
+            attention_mask=attention_mask,
             model_type=model_type,
         )
     

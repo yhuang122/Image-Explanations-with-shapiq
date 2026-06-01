@@ -350,7 +350,11 @@ class ImageImputer:
             kwargs["max_length"] = 64
         elif self.model_type == "clip":
             kwargs["padding"] = True
-        return self.processor(**kwargs)
+        outputs = self.processor(**kwargs)
+        # SigLIP tokenizer does not return attention_mask; derive it
+        if "attention_mask" not in outputs:
+            outputs["attention_mask"] = (outputs["input_ids"] != 1).long()
+        return outputs
 
     def _dict_to_po(self, raw: dict, device) -> ProcessorOutput:
         """Convert raw processor dict to ProcessorOutput on device."""
