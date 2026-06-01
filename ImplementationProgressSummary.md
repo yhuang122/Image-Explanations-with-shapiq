@@ -1,6 +1,6 @@
 # ImageImputer — Implementation Progress Summary
 
-> Last updated: 2026-05-27
+> Last updated: 2026-06-02
 
 ## Implementation Progress Summary
 
@@ -143,11 +143,21 @@ After B2.1 is complete, verify the SLICSegmenter + VisionMeanMasker pipeline wor
 
 | # | Model | Backbone | Key Check | Status |
 |---|---|---|---|---|
-| B2a.1 | `openai/clip-rn50` | ResNet-50 | Correct model detection (should still return `"clip"`), SLIC layout produced, no crash | ⬜ Not started |
-| B2a.2 | `openai/clip-rn101` | ResNet-101 | Same as above, verify memory usage | ⬜ Not started |
-| B2a.3 | `openai/clip-rn50x4` | ResNet-50×4 | Larger ResNet variant — validate throughput | ⬜ Not started |
+| B2a.1 | `openai/clip-rn50` | ResNet-50 | Correct model detection (should still return `"clip"`), SLIC layout produced, no crash | ✅ Smoke passed |
+| B2a.2 | `openai/clip-rn101` | ResNet-101 | Same as above, verify memory usage | ✅ Smoke passed |
+| B2a.3 | `openai/clip-rn50x4` | ResNet-50×4 | Larger ResNet variant — validate throughput | ✅ Smoke passed |
 
 **Integration check**: Run `example.ipynb` equivalent with CLIP-ResNet + `segmenter="slic"`. Expected: AID values within ±5% of ViT-based results (SLIC superpixels may yield different but valid attributions). If the workflow fails (crash / NaN / OOM), B1 fixes take priority.
+
+**B2.1/B2a validation note (2026-06-02)**: CLIP-ResNet + `segmenter="slic"` smoke validation passed on CUDA. All three variants detected as `"clip"`; SLIC kept the CPU label map and cached/scattered masks on `cuda:0`; no crash / NaN / OOM observed.
+
+| Model | Image size | Image players | Smoke coalitions | Throughput | Peak CUDA | AID |
+|---|---:|---:|---:|---:|---:|---:|
+| `openai/clip-rn50` | 224 | 31 | 8 | 78.49 coalitions/s | 0.26 GB | 0.7622 |
+| `openai/clip-rn101` | 224 | 31 | 8 | 92.88 coalitions/s | 0.54 GB | 1.0381 |
+| `openai/clip-rn50x4` | 288 | 31 | 8 | 72.52 coalitions/s | 0.95 GB | 0.7466 |
+
+Recorded AID values are smoke/integration outputs; strict ±5% reporting should compare these against the saved ViT baseline if required by the experiment report.
 
 #### B3. Masker Extension
 

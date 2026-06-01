@@ -51,7 +51,7 @@ class ImageImputerFactory:
         input_image: Any,
         input_text: str,
         segmenter: Optional[str] = None,
-        segmenter_kwargs: Optional[dict] = {},
+        segmenter_kwargs: Optional[dict] = None,
         masker: Optional[str] = None,
         use_amp: bool = False,
     ) -> ImageImputer:
@@ -79,6 +79,10 @@ class ImageImputerFactory:
             Configured ImageImputer ready for forward_1d / forward_crossmodal.
         """
         # ── 1. Infer model type ─────────────────────────────────────────
+        # Keep each build isolated; the factory mutates this copy to inject
+        # required per-image defaults such as SLIC's image_array.
+        segmenter_kwargs = dict(segmenter_kwargs or {})
+
         model_type = self._infer_model_type(model)
 
         # ── 2. Extract model dimensions (ViT or CNN backbone) ──────────
