@@ -65,7 +65,7 @@
 ### Data Types (in `ImputerFactory/data.py`)
 **Sole responsibility**: Universal data protocol — define the shapes and semantics of objects passed between modules.
 
-- `ImputerConfig`: shared read-only configuration (produced by Factory, consumed by all modules). Contains model metadata, segmenter/masker selection, and `segmenter_kwargs` for variable block sizing.
+- `ImputerConfig`: shared read-only configuration (produced by Factory, consumed by all modules). Contains model metadata (`model_type`, `image_size`, `patch_size`, `n_channels`, `n_players_image`, `n_players_text`, `grid_size`, `text_total_length`, `use_amp`). Does NOT carry component selection or user-provided parameters — those live in `SegmenterConfig` / `MaskerConfig`. (Planned: remove `segmenter`, `masker`, `segmenter_kwargs` fields — see "Future API Evolution" section.)
 - `SpatialLayout`: immutable metadata (produced by Segmenter, consumed by Imputer)
 - `PhysicalMask`: concrete tensor masks (produced by Segmenter/imputer translation, consumed by Masker)
 - `ProcessorOutput`: standardized model inputs (produced by Factory, consumed by Masker and Imputer)
@@ -80,6 +80,7 @@
 | Segmenter never accesses GPU inside `generate_masks` | "CPU Planning, GPU Execution": masks generated once, applied in bulk |
 | Masker clones inputs before modifying | Prevents mutation bugs across batch iterations |
 | Game never imports `torch` | Keeps the adapter pure; all tensor ops live in ImputerFactory |
+| `SegmenterConfig` / `MaskerConfig` are user-provided; `ImputerConfig` is Factory-produced | Clear separation: user controls component selection + params, factory controls model metadata |
 
 ---
 
@@ -114,11 +115,260 @@ Coalitions (np.bool)                Visualization / Notebook
 
 1. **"CPU Planning, GPU Execution"**: Segmenters produce integer index maps once on CPU (via skimage). Thousands of coalition→mask translations happen purely on GPU via native tensor ops.
 
-2. **ImputerConfig as shared truth**: `ImputerConfig` is created once by the Factory and shared read-only across Segmenter, Masker, and Imputer. This eliminates scattered model introspection. `segmenter_kwargs` carries variable block-size parameters from Factory → Segmenter.
+2. **ImputerConfig as shared truth**: `ImputerConfig` is created once by the Factory and shared read-only across Segmenter, Masker, and Imputer. This eliminates scattered model introspection. It contains only model metadata — component selection and parameters live in `SegmenterConfig` / `MaskerConfig` instead. (Planned: remove the interim `segmenter_kwargs` approach — see "Future API Evolution".)
 
 3. **Imputer owns the inputs**: `ImageImputer` stores `inputs_original` (ProcessorOutput), `inputs_raw` (HF dict for `.tokens()`), and `input_image`/`input_text` (for crossmodal edge cases where batch sizes diverge).
 
 4. **Game is a thin shell**: `VisionLanguageGame` delegates all masking/batching/model-forward to the Imputer. It only handles shapiq scheduling (normalization values, player counts).
+
+---
+
+## Future API Evolution: Typed Component Configuration
+
+> Planned for Phase 2. Not yet implemented.
+> Target: Replace string-based `segmenter`/`segmenter_kwargs`/`masker` parameters
+> with typed `SegmenterConfig` and `MaskerConfig` dataclasses.
+
+### Motivation
+
+The current `build()` API uses three loosely-typed parameters to describe component selection:
+
+```python
+def build(self, model, processor, input_image, input_text,
+          segmenter: Optional[str] = None,         # "patch" / "slic" / "gradient_guided"
+          segmenter_kwargs: Optional[dict] = None,  # weak dict: keys discovered at runtime
+          masker: Optional[str] = None,             # "crossmodal_mean" / "vision" / "text"
+          ...)
+```
+
+Three problems this creates:
+
+1. **`segmenter_kwargs` is a type hole.** IDE autocomplete cannot suggest keys, mypy cannot catch typos (`n_segments` vs `n_segements`), and per-strategy parameters mix in one flat dict (`image_array` for SLIC coexists with `model` for gradient-guided).
+
+2. **Mixed concerns in `ImputerConfig`.** Today it carries model metadata (`image_size`, `model_type`, etc.) **and** component selection (`segmenter`, `masker`) **and** a dict of strategy-specific params. Design doc says "ImputerConfig is produced by Factory" — but `segmenter_kwargs` is user-provided, violating that boundary.
+
+3. **No migration path for new parameters.** Every new segmenter adds more undocumented keys to the same `dict`. Callers must grep the segmenter constructor to learn what keys are accepted.
+
+### Proposed solution: `SegmenterConfig` + `MaskerConfig`
+
+Add two new user-facing configuration dataclasses to `ImputerFactory/data.py`. `build()` accepts these instead of strings; the factory uses them to select and parameterize components. `ImputerConfig` sheds its component-selection fields and becomes a pure model-metadata container.
+
+### Planned dataclass design
+
+```python
+# ── Segmenter parameter types (one per strategy) ─────────────────────
+
+@dataclass
+class PatchParams:
+    """Rigid-grid patch segmenter. No configurable parameters."""
+    pass
+
+
+@dataclass
+class SlicParams:
+    """SLIC superpixel segmentation parameters."""
+    n_segments: int = 49
+    compactness: float = 10.0
+    sigma: float = 0.0
+
+
+@dataclass
+class GradientGuidedParams:
+    """Gradient-guided saliency segmentation."""
+    n_segments: Optional[int] = None  # None → derive from grid_size
+
+
+@dataclass
+class SegmenterConfig:
+    """
+    User-facing configuration for spatial division.
+
+    strategy="auto" delegates selection to the Factory
+    (ViT → "patch", CNN → "slic") — same as today's segmenter=None.
+    """
+    strategy: Literal["auto", "patch", "slic", "gradient_guided"] = "auto"
+    patch: PatchParams = field(default_factory=PatchParams)
+    slic: SlicParams = field(default_factory=SlicParams)
+    gradient_guided: GradientGuidedParams = field(default_factory=GradientGuidedParams)
+
+    @property
+    def active_params(self):
+        """Return the params dataclass for the active strategy."""
+        return getattr(self, self.strategy, None)
+
+
+@dataclass
+class MaskerConfig:
+    """
+    User-facing configuration for occlusion strategy.
+
+    Currently maskers take no runtime parameters, so this acts
+    as a simple selector. Future maskers (e.g. AttentionMasker)
+    will add their own params fields here.
+    """
+    strategy: Literal["auto", "crossmodal_mean", "vision", "text"] = "auto"
+```
+
+### New `build()` signature
+
+```python
+from ImputerFactory.data import SegmenterConfig, MaskerConfig
+
+class ImageImputerFactory:
+    def build(
+        self,
+        model: Any,
+        processor: Any,
+        input_image: Any,
+        input_text: str,
+        segmenter_config: Optional[SegmenterConfig] = None,  # ← replaces segmenter + segmenter_kwargs
+        masker_config: Optional[MaskerConfig] = None,         # ← replaces masker
+        use_amp: bool = False,
+    ) -> ImageImputer:
+```
+
+The old `segmenter`, `segmenter_kwargs`, and `masker` parameters are removed entirely. `None` means "auto-select" (preserving current default behavior).
+
+**Before / After comparison:**
+
+| Before | After |
+|---|---|
+| `build(model, proc, img, txt)` | `build(model, proc, img, txt)` — unchanged |
+| `build(..., segmenter="slic")` | `build(..., segmenter_config=SegmenterConfig(strategy="slic"))` |
+| `build(..., segmenter="slic", segmenter_kwargs={"n_segments": 60})` | `build(..., segmenter_config=SegmenterConfig(strategy="slic", slic=SlicParams(n_segments=60)))` |
+| `build(..., segmenter="gradient_guided")` | `build(..., segmenter_config=SegmenterConfig(strategy="gradient_guided"))` |
+| `build(..., masker="vision")` | `build(..., masker_config=MaskerConfig(strategy="vision"))` |
+
+### `ImputerConfig` simplification
+
+Remove three fields from `ImputerConfig`:
+
+| Remove | Replaced by |
+|---|---|
+| `segmenter: Optional[str]` | `SegmenterConfig.strategy` |
+| `masker: Optional[str]` | `MaskerConfig.strategy` |
+| `segmenter_kwargs: dict` | Typed fields in per-strategy params (e.g. `SlicParams.n_segments`) |
+
+`ImputerConfig` retains: `model_type`, `image_size`, `patch_size`, `n_channels`, `n_players_image`, `n_players_text`, `grid_size`, `text_total_length`, `use_amp`.
+
+This restores the original contract: **ImputerConfig is produced by the Factory (model metadata only)**. Component selection becomes an entirely separate axis delivered by the caller.
+
+### Segmenter constructor changes
+
+**Before:** `Segmenter(config: ImputerConfig)` — reads everything from one object, including `config.segmenter_kwargs` as a weak dict.
+
+**After:** `Segmenter(config: ImputerConfig, seg_config: SegmenterConfig)` — receives model metadata (config) and its own typed parameters (seg_config) as two separate arguments.
+
+**Runtime dependency injection changes.** Today, the factory injects per-segmenter runtime objects (image_array for SLIC, model/processor for gradient-guided) by mutating `config.segmenter_kwargs`:
+
+```python
+config.segmenter_kwargs.setdefault("image_array", input_image)
+config.segmenter_kwargs.setdefault("model", model)
+config.segmenter_kwargs.setdefault("processor", processor)
+```
+
+After the change, these become explicit constructor arguments, surfaced via per-strategy dispatch in `_create_segmenter`:
+
+```python
+def _create_segmenter(
+    self,
+    config: ImputerConfig,
+    seg_config: SegmenterConfig,
+    model, processor, input_image, input_text,
+) -> BaseSegmenter:
+    cls = get_segmenter(seg_config.strategy)
+
+    if seg_config.strategy == "slic":
+        return cls(config=config, seg_config=seg_config, image_array=input_image)
+
+    if seg_config.strategy == "gradient_guided":
+        return cls(config=config, seg_config=seg_config,
+                   model=model, processor=processor,
+                   image=input_image, text=input_text)
+
+    # "patch" / default — no runtime deps beyond config + seg_config
+    return cls(config=config, seg_config=seg_config)
+```
+
+This makes the contract explicit: `SLICSegmenter` requires `image_array`, `GradientGuidedSegmenter` requires `model` + `processor` + `image` + `text`. A new segmenter simply adds its own case here; the parameter names in the constructor become the documentation.
+
+### Masker constructor changes
+
+Currently maskers take no arguments (`CrossModalMeanMasker.__init__(self)`). After the change, all maskers accept `mask_config: MaskerConfig` to keep the constructor signature uniform, even if the current maskers ignore it:
+
+```python
+class CrossModalMeanMasker(BaseMasker):
+    def __init__(self, mask_config: MaskerConfig):
+        self._vision_masker = VisionMeanMasker(mask_config=mask_config)
+        self._text_masker = TextAttentionMasker(mask_config=mask_config)
+```
+
+This ensures `AttentionMasker(mask_config)` can be added later without another factory rewrite.
+
+### Factory flow after change
+
+```
+build(model, processor, image, text, segmenter_config=..., masker_config=..., use_amp=...)
+  │
+  ├─ 1. Infer model type (clip/siglip/siglip2)
+  ├─ 2. Extract model dimensions (image_size, patch_size, n_channels)
+  ├─ 3. Preprocess once → n_players_text, text_total_length
+  ├─ 4. Build ImputerConfig (model metadata only — no segmenter/masker fields)
+  ├─ 5. Resolve segmenter_config.strategy (auto → "patch" for ViT, "slic" for CNN)
+  ├─ 6. _create_segmenter(config, seg_config, model, processor, image, text)
+  └─ 7. _create_masker(mask_config)
+```
+
+Steps 1–4 are unchanged from today. The key differences:
+- Step 4 no longer writes `segmenter`/`masker`/`segmenter_kwargs` into `ImputerConfig`.
+- Step 6 passes per-strategy runtime deps explicitly rather than hiding them in a dict.
+- Step 7 passes `mask_config` instead of relying on parameterless constructors.
+
+### No changes outside the Factory boundary
+
+- **`ImageImputer`**: unchanged. Its constructor signature and runtime behavior are unaffected; `ImputerConfig` simply has fewer fields.
+- **`VisionLanguageGame`**: unchanged — never sees config objects.
+- **`SpatialLayout` / `PhysicalMask` / `ProcessorOutput`**: unchanged.
+- **Segmenter / Masker registries**: unchanged. The `@register_segmenter("name")` decorator still maps string names to classes; only the call site in `_create_segmenter` changes.
+
+### Migration path
+
+```
+Phase 1 (current state): 
+  build() uses segmenter / segmenter_kwargs / masker.
+  ImputerConfig carries model metadata + component selection.
+
+Phase 2 (this plan):
+  → Add SegmenterConfig / MaskerConfig / per-strategy params dataclasses
+  → Replace build() signature: remove three old params, add two new ones
+  → Update all call sites (~9 experiment files + 3 notebooks)
+  → Strip segmenter / masker / segmenter_kwargs from ImputerConfig
+  → Update segmenter constructors: (config) → (config, seg_config)
+  → Update masker constructors: () → (mask_config)
+  → Remove per-strategy segmenter_kwargs.setdefault() from factory
+  → Add explicit per-strategy dispatch in _create_segmenter
+
+Phase 3 (future):
+  Existing callers already migrated; no deprecation period needed.
+  New segmenters (AdaptiveSegmenter, etc.) add a params dataclass + 
+  one case in _create_segmenter dispatch — no dict-based parameter passing.
+
+No deprecation bridge is planned. The change is mechanical and affects
+~12 known call sites; a sed / regex pass covers the migration in minutes.
+Type errors from mypy catch any missed spots at compile time.
+```
+
+### Tradeoff summary
+
+| Dimension | Phase 1 (strings + dict) | Phase 2 (typed configs) |
+|---|---|---|
+| **Type safety** | `segmenter_kwargs` has none | Every parameter is a typed field |
+| **User burden** | Low — strings are concise | Slightly higher — import + instantiate config class |
+| **IDE support** | None for dict keys | Autocomplete + type hints for every field |
+| **Runtime deps** | Hidden in dict, discovered by reading constructor | Explicit in `_create_segmenter` dispatch + constructor signature |
+| **Self-documentation** | `help(SlicParams.__init__)` vs grepping source | `help(SlicParams)` shows all params + defaults |
+| **Extensibility** | New segmenter = more undocumented dict keys | New segmenter = new params dataclass + one dispatch branch |
+| **Lines of config code** | 3 stub classes | ~6–8 small classes (~60 lines total) |
 
 ---
 
