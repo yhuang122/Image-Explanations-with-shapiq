@@ -21,7 +21,7 @@ from src.plot import (
     _get_line_lengths,
     value_to_color,
 )
-from src.utils import get_subset, sort_interactions, convert_iv_to_first_order
+from src.utils import get_subset, sort_interactions
 
 
 def plot_image_and_text_together(
@@ -99,25 +99,20 @@ def plot_image_and_text_together(
         if lm is not None:
             label_map = lm.cpu().numpy()  # (H, W) int
 
-    # ── First-order values ─────────────────────────────────────────────
-    first_order = convert_iv_to_first_order(iv)
-    values1 = first_order.get_n_order(1).values
-    img_vals = values1[:n_players_image]
-    txt_vals = values1[n_players_image:]
-
-    max_abs_img = float(np.quantile(np.abs(img_vals), 0.99) or 1.0)
+    # ── Compute global colors for heatmap & text tokens ────────────────
+    # Uses the full iv so alpha is normalised across image + text players,
+    # matching the original src.plot behaviour.
+    colors_global = interactions_to_color(iv, max_value=max_value)
 
     # ── Build heatmap ──────────────────────────────────────────────────
     if label_map is None:
         iv_image = get_subset(iv, players=image_players)
-        heatmap_img = interactions_to_heatmap(iv=iv_image, img=img, colors=None)
+        heatmap_img = interactions_to_heatmap(iv=iv_image, img=img, colors=colors_global)
     else:
         heatmap_arr = np.zeros((H, W, 4), dtype=np.float32)
         for k in range(n_players_image):
-            v = float(img_vals[k])
-            c_rgb = value_to_color(v)
-            alpha = min(abs(v) / max_abs_img, 1.0)
-            heatmap_arr[label_map == k] = (*c_rgb, alpha)
+            c_rgba = colors_global[(k,)]
+            heatmap_arr[label_map == k] = (*c_rgba[:3], min(c_rgba[3], 1.0))
         heatmap_img = Image.fromarray((heatmap_arr * 255).astype(np.uint8))
 
     # ── Figure & axes (single axes like src.plot) ──────────────────────
@@ -205,8 +200,7 @@ def plot_image_and_text_together(
     x_pos = line_start + left_margins[line_counter]
     for i, (word, (wd, _ht)) in enumerate(zip(text, word_dimensions)):
         player = n_players_image + i
-        v = txt_vals[i] if i < len(txt_vals) else 0.0
-        alpha = min(abs(v) / (max_abs_img or 1.0), 1.0)
+        player_tuple = (player,)
 
         # Fix: skip empty padding tokens — don't render or register
         # their positions, avoiding ghost interaction curves.
@@ -223,21 +217,10 @@ def plot_image_and_text_together(
             # Move down one line
             y_pos -= (line_height + line_height * line_padding) / conversion_factor
 
-        # ─── Academic Standardization Correction: Enforce Shared Colormap Scale for Text and Line Segments ───
-        colors_global = interactions_to_color(iv, max_value=max_value)
-        player_tuple = (player,) 
-        
+        # ── Use the global colormap (computed above) ──────────────
         if color_text and player_tuple in colors_global:
             facecolor = colors_global[player_tuple][:3]
             alpha = colors_global[player_tuple][3]
-        elif color_text:
-            player_int = player
-            if player_int in colors_global:
-                facecolor = colors_global[player_int][:3]
-                alpha = colors_global[player_int][3]
-            else:
-                facecolor = value_to_color(v)
-                alpha = min(abs(v) / (max_abs_img or 1.0), 1.0)
         else:
             facecolor = (1.0, 1.0, 1.0)
             alpha = 1.0
@@ -307,8 +290,6 @@ def plot_image_and_text_together(
         if debug:
             print(f"Top {top_k} cross-modal interactions: {top_interactions}")
 
-        colors = interactions_to_color(iv, max_value=max_value)
-
         hyper_edges_to_draw = []
         for interaction in top_interactions:
             interaction = interaction[0]
@@ -322,7 +303,7 @@ def plot_image_and_text_together(
         draw_fancy_hyper_edges(
             axis=ax,
             pos=positions,
-            colors=colors,
+            colors=colors_global,
             hyper_edges=hyper_edges_to_draw,
             debug=debug,
         )
@@ -330,3 +311,5 @@ def plot_image_and_text_together(
     plt.tight_layout(pad=0.05)
     if show:
         plt.show()
+    else:
+        return fig
