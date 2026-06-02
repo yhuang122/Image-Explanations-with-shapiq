@@ -105,7 +105,7 @@
 | A3.1 | CLIP ViT-B/32 | Already validated in `example.ipynb` | ✅ Done |
 | A3.2 | CLIP ViT-B/16 | Test with 196 image players (14×14 grid) | ⬜ Not started |
 | A3.3 | CLIP ViT-L/14 | Test with 256 image players (16×16 grid), verify memory usage | ⬜ Not started |
-| A3.4 | SigLIP base-patch16 | Test model_type detection + text masking logic | ⬜ Not started |
+| A3.4 | SigLIP base-patch16 | Test model_type detection + text masking logic | 🔄 In progress |
 | A3.5 | SigLIP2 so400m | Test model_type detection (`siglip2` path) | ⬜ Not started |
 
 #### A4. Feedback Loop to Team B
