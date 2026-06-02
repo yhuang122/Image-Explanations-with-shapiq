@@ -179,7 +179,7 @@ Recorded AID values are smoke/integration outputs; strict ±5% reporting should 
 
 | # | Task | Details | Blocked by | Status |
 |---|---|---|---|---|
-| B6.1 | AID curve library | Extract reusable AID computation + plotting from migrated A1.2 (`insertion_deletion.py`) and A1.7 (`explain_mscoco.py`). Must NOT re-implement experiment logic — only factor out common code | A1.2 ✅ / A1.7 ⬜ | 🔄 Planning |
+| B6.1 | AID curve library | Extract reusable AID computation + plotting from migrated A1.2 (`insertion_deletion.py`) and A1.7 (`explain_mscoco.py`). Must NOT re-implement experiment logic — only factor out common code | A1.2 ✅ / A1.7 ✅ | 🔄 Ongoing |
 | B6.2 | Faithfulness evaluation library | Extract reusable faithfulness metrics + harness from migrated A1.1 (`faithfulness.py`). Compare metrics before/after migration | A1.1 ✅ | ⬜ Not started |
 
 | # | Task | Details | Status |
