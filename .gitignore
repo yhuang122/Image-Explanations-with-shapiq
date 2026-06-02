@@ -4,7 +4,11 @@
 examples/
 data/demo_dog.jpg
 experiments/wandb
+results/openai/clip-vit-base-patch32/
+results_1000/
+results_siglip/
 results_v2/
+wandb/
 test.ipynb
 # Byte-compiled / optimized / DLL files
 __pycache__/
