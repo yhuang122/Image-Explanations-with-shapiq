@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -49,13 +48,20 @@ CASES = {
 }
 
 SUMMARY_FIELDS = (
-    "model_name", "n_players", "n_players_image", "n_players_text", "num_coalitions",
+    "model_name", "text", "n_players", "n_players_image", "n_players_text", "num_coalitions",
     "batch_size", "tolerance", "max_abs_diff", "mean_abs_diff", "passed",
 )
 ROW_FIELDS = (
     "coalition_index", "image_coalition_index", "text_coalition_index", "coalition_size",
     "image_coalition_size", "text_coalition_size", "reference_value", "candidate_value", "abs_diff",
 )
+
+
+def slug(value: str, max_length: int = 48) -> str:
+    text = "".join(char.lower() if char.isalnum() else "_" for char in value.strip())
+    while "__" in text:
+        text = text.replace("__", "_")
+    return text.strip("_")[:max_length] or "empty"
 
 
 def parse_args() -> argparse.Namespace:
@@ -198,8 +204,10 @@ def iter_result_rows(inputs: dict, reference_values: np.ndarray, candidate_value
 
 
 def run_name(case: dict) -> str:
-    text_hash = hashlib.sha1(case["text"].encode("utf-8")).hexdigest()[:8]
-    return f"{case['case']}_{case['input_path'].stem}_text{text_hash}_rs{case['random_state']}_n{case['num_coalitions']}"
+    return (
+        f"{case['case']}_{case['input_path'].stem}_"
+        f"text_{slug(case['text'])}_rs{case['random_state']}_n{case['num_coalitions']}"
+    )
 
 
 def write_baseline(path: Path, case_name: str, case: dict, inputs: dict, old_values: np.ndarray) -> None:
@@ -301,6 +309,7 @@ def main() -> int:
         "baseline_path": str(path) if args.write_baseline or args.compare_baseline else None,
         "input_path": str(case["input_path"]),
         "model_name": case["model_name"],
+        "text": case["text"],
         "device": str(device),
         "n_players": int(old_game.n_players),
         "n_players_image": int(old_game.n_players_image),

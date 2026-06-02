@@ -1,0 +1,5 @@
+model_name,text,n_players,n_players_image,n_players_text,num_coalitions,batch_size,tolerance,max_abs_diff,mean_abs_diff,passed,coalition_index,image_coalition_index,text_coalition_index,coalition_size,image_coalition_size,text_coalition_size,reference_value,candidate_value,abs_diff
+openai/clip-vit-base-patch32,giraffe,50,49,1,4,2,0.0001,0.0,0.0,True,0,,,0,,,23.023147583007812,23.023147583007812,0.0
+openai/clip-vit-base-patch32,giraffe,50,49,1,4,2,0.0001,0.0,0.0,True,1,,,50,,,29.745637893676758,29.745637893676758,0.0
+openai/clip-vit-base-patch32,giraffe,50,49,1,4,2,0.0001,0.0,0.0,True,2,,,25,,,21.998022079467773,21.998022079467773,0.0
+openai/clip-vit-base-patch32,giraffe,50,49,1,4,2,0.0001,0.0,0.0,True,3,,,22,,,22.2524356842041,22.2524356842041,0.0

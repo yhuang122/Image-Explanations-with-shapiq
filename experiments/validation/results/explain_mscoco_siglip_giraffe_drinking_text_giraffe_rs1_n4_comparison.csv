@@ -1,0 +1,5 @@
+model_name,text,n_players,n_players_image,n_players_text,num_coalitions,batch_size,tolerance,max_abs_diff,mean_abs_diff,passed,coalition_index,image_coalition_index,text_coalition_index,coalition_size,image_coalition_size,text_coalition_size,reference_value,candidate_value,abs_diff
+google/siglip2-base-patch32-256,giraffe,66,64,2,4,2,0.0001,0.0,0.0,True,0,,,0,,,-7.933323860168457,-7.933323860168457,0.0
+google/siglip2-base-patch32-256,giraffe,66,64,2,4,2,0.0001,0.0,0.0,True,1,,,66,,,-2.3380908966064453,-2.3380908966064453,0.0
+google/siglip2-base-patch32-256,giraffe,66,64,2,4,2,0.0001,0.0,0.0,True,2,,,34,,,-9.991189956665039,-9.991189956665039,0.0
+google/siglip2-base-patch32-256,giraffe,66,64,2,4,2,0.0001,0.0,0.0,True,3,,,30,,,-9.725915908813477,-9.725915908813477,0.0

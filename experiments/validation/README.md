@@ -7,3 +7,10 @@ python .\experiments\validation\compare_games.py --case pointing_game_shapley --
 Runs an old-vs-new Game pipeline comparison for the selected image/text input and writes the CSV result to `experiments/validation/results/`.
 
 Use the migrated Python file name without `.py` for `--case`.
+
+```powershell
+python .\experiments\validation\summarize_results.py
+```
+
+Reads comparison CSV files from `experiments/validation/results/` and writes `experiments/validation/results/summary.csv`.
+It also writes `experiments/validation/results/max_abs_diff_summary.png`.

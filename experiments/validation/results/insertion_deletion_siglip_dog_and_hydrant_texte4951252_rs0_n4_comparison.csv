@@ -1,5 +1,0 @@
-model_name,n_players,n_players_image,n_players_text,num_coalitions,batch_size,tolerance,max_abs_diff,mean_abs_diff,passed,coalition_index,image_coalition_index,text_coalition_index,coalition_size,image_coalition_size,text_coalition_size,reference_value,candidate_value,abs_diff
-google/siglip-base-patch16-224,197,196,1,4,2,0.0001,0.0,0.0,True,0,,,0,,,-15.914621353149414,-15.914621353149414,0.0
-google/siglip-base-patch16-224,197,196,1,4,2,0.0001,0.0,0.0,True,1,,,197,,,-4.665574073791504,-4.665574073791504,0.0
-google/siglip-base-patch16-224,197,196,1,4,2,0.0001,0.0,0.0,True,2,,,107,,,-4.653355598449707,-4.653355598449707,0.0
-google/siglip-base-patch16-224,197,196,1,4,2,0.0001,0.0,0.0,True,3,,,91,,,-16.60780906677246,-16.60780906677246,0.0
