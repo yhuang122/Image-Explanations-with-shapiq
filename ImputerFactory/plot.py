@@ -223,13 +223,25 @@ def plot_image_and_text_together(
             # Move down one line
             y_pos -= (line_height + line_height * line_padding) / conversion_factor
 
-        # colour from first-order value
-        if color_text:
-            c_rgb = value_to_color(v)
-            facecolor = c_rgb
+        # ─── Academic Standardization Correction: Enforce Shared Colormap Scale for Text and Line Segments ───
+        colors_global = interactions_to_color(iv, max_value=max_value)
+        player_tuple = (player,) 
+        
+        if color_text and player_tuple in colors_global:
+            facecolor = colors_global[player_tuple][:3]
+            alpha = colors_global[player_tuple][3]
+        elif color_text:
+            player_int = player
+            if player_int in colors_global:
+                facecolor = colors_global[player_int][:3]
+                alpha = colors_global[player_int][3]
+            else:
+                facecolor = value_to_color(v)
+                alpha = min(abs(v) / (max_abs_img or 1.0), 1.0)
         else:
             facecolor = (1.0, 1.0, 1.0)
             alpha = 1.0
+        # ─────────────────────────────────────────────────────────
 
         text_color = "black" if alpha < 0.8 else "white"
 
@@ -273,23 +285,23 @@ def plot_image_and_text_together(
     if iv.max_order >= 2 and plot_interactions:
         iv_second_order = iv.get_n_order(order=2, min_order=2, max_order=2)
         
-        # 1. 获取所有排序后的二维交互
+        # 1. Retrieve all sorted 2D interactions.
         all_2nd_order = sort_interactions(
             iv_second_order, reverse=True, sort_by_abs=sort_by_abs
         )
 
-        # 2. 修正：增设二分图掩码，严格过滤出跨模态（图像 ↔ 文本）交互
-        # 剔除纯图像内部 (Image-Image) 或纯文本内部 (Text-Text) 的噪声交互
+        # 2. Fix: Introduced a bipartite mask to strictly filter for cross-modal (Image ↔ Text) interactions.
+        # Eliminated noisy interactions occurring purely within the image modality (Image-Image) or the text modality (Text-Text).
         cross_modal_interactions = []
         for interaction_data in all_2nd_order:
             interaction = interaction_data[0]
             if len(interaction) == 2:
                 p1, p2 = interaction
-                # 逻辑 XOR 校验：必须仅有一个节点索引小于 n_players_image
+                # Logical XOR Check: Exactly one node index must be less than n_players_image.
                 if (p1 < n_players_image) != (p2 < n_players_image):
                     cross_modal_interactions.append(interaction_data)
         
-        # 3. 在纯净的跨模态池中截取前 top_k
+        # 3. Extract the top_k values ​​from a clean cross-modal pool.
         top_interactions = cross_modal_interactions[:top_k]
 
         if debug:
@@ -301,7 +313,7 @@ def plot_image_and_text_together(
         for interaction in top_interactions:
             interaction = interaction[0]
             
-            # 4. 坐标系安全校验：确保连接节点没有被 Padding 规则剔除
+            # 4. Coordinate System Safety Check: Ensure that connected nodes have not been discarded by Padding rules.
             if not all(p in positions for p in interaction):
                 continue
                 
