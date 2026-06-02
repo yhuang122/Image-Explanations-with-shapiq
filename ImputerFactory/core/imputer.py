@@ -254,13 +254,34 @@ class ImageImputer:
                     # Fast path: batch sizes match, just apply text mask
                     masked = self.masker.apply(inputs_img_masked, txt_slice_mask)
                 else:
-                    # Edge case: txt batch ≠ img batch → reprocess with processor
-                    raw = self._preprocess_batch(img_bs, txt_bs)
-                    # Apply image mask
+                    # Edge case: txt batch ≠ img batch.
+                    # Avoid calling the full image processor (expensive) —
+                    # reuse the already-preprocessed image tensor and only
+                    # re-tokenize the text (cheap).
                     img_only = PhysicalMask(image_binary_mask=img_slice_mask.image_binary_mask)
-                    masked = self.masker.apply(self._dict_to_po(raw, device), img_only)
+                    masked_img = self.masker.apply(inputs_img_masked, img_only)
+
+                    # Re-tokenize text to match txt_bs; skip image processing.
+                    # Must match _preprocess_batch's padding strategy for this model type.
+                    text_kwargs = dict(
+                        text=[self.input_text] * txt_bs,
+                        return_tensors="pt",
+                    )
+                    if self.model_type in ("siglip", "siglip2"):
+                        text_kwargs["padding"] = "max_length"
+                        text_kwargs["max_length"] = 64
+                    else:
+                        text_kwargs["padding"] = True
+                    text_raw = self.processor(**text_kwargs)
+                    if "attention_mask" not in text_raw:
+                        text_raw["attention_mask"] = (text_raw["input_ids"] != 1).long()
+
+                    # Replace text in the already-masked image
+                    masked_img.input_ids = text_raw["input_ids"].to(device)
+                    masked_img.attention_mask = text_raw["attention_mask"].to(device)
+
                     # Apply text mask
-                    masked = self.masker.apply(masked, txt_slice_mask)
+                    masked = self.masker.apply(masked_img, txt_slice_mask)
 
                 outputs = self._model_forward(masked)
                 col_outputs.append(outputs.logits_per_image.cpu())

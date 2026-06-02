@@ -23,3 +23,4 @@ from .maskers import (
     TextAttentionMasker,
     CrossModalMeanMasker,
 )
+from .regression import crossmodal_approximation, chunked_aggregate
