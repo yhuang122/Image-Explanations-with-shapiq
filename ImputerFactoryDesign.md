@@ -143,9 +143,9 @@ def build(self, model, processor, input_image, input_text,
 
 Three problems this creates:
 
-1. **`segmenter_kwargs` is a type hole.** IDE autocomplete cannot suggest keys, mypy cannot catch typos (`n_segments` vs `n_segements`), and per-strategy parameters mix in one flat dict (`image_array` for SLIC coexists with `model` for gradient-guided).
+1. **`segmenter_kwargs` is a type hole.** IDE autocomplete cannot suggest keys, mypy cannot catch typos (`n_segments` vs `n_segements`), and per-strategy parameters mix in one flat dict (`image_array` for SLIC coexists with `model` for gradient-guided). The only way to discover available keys is to read the segmenter constructor source code.
 
-2. **Mixed concerns in `ImputerConfig`.** Today it carries model metadata (`image_size`, `model_type`, etc.) **and** component selection (`segmenter`, `masker`) **and** a dict of strategy-specific params. Design doc says "ImputerConfig is produced by Factory" — but `segmenter_kwargs` is user-provided, violating that boundary.
+2. **Component parameters mixed with model metadata in `ImputerConfig`.** Today `ImputerConfig` carries two categories of data with different origins: model metadata derived from introspection (`image_size`, `patch_size`, `model_type`, etc.) **and** user-provided component selection (`segmenter`, `masker`) plus a dict of strategy-specific params (`segmenter_kwargs`). These are conceptually separate: the Factory produces model metadata, the caller provides component choices. Mixing them in one dataclass makes it harder to reason about what the Factory owns vs what the caller controls. (Note: this is a design smell, not a boundary violation — the Factory still constructs `ImputerConfig` internally in both the current and proposed design, so the "ImputerConfig is produced by Factory" rule is satisfied either way.)
 
 3. **No migration path for new parameters.** Every new segmenter adds more undocumented keys to the same `dict`. Callers must grep the segmenter constructor to learn what keys are accepted.
 
