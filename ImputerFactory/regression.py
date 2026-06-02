@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Optional, Dict
 import numpy as np
+from scipy.linalg import cho_factor, cho_solve, blas as blas
 import shapiq
 from shapiq.utils.sets import generate_interaction_lookup
 
@@ -72,6 +73,9 @@ def chunked_aggregate(
     n_interactions = len(interaction_lookup)
 
     # ── Accumulators for normal equations (P×P and P×1) ────────────
+    # XtWX stores only the upper triangle (filled by BLAS dsyrk);
+    # it is treated as a full matrix for the Ridge diagonal add and
+    # cho_factor / cho_solve below.
     XtWX = np.zeros((n_interactions, n_interactions), dtype=np.float64)
     XtWy = np.zeros(n_interactions, dtype=np.float64)
 
@@ -95,12 +99,23 @@ def chunked_aggregate(
         w_chunk = regression_weights[start:end]
         y_chunk = coalition_values[start:end]
 
-        # Weighted accumulation
-        WX_chunk = w_chunk[:, np.newaxis] * X_chunk
-        XtWX += X_chunk.T @ WX_chunk
-        XtWy += WX_chunk.T @ y_chunk
+        # Pre-whiten: Xs = sqrt(w) * X,  ys = sqrt(w) * y
+        sw = np.sqrt(w_chunk)
+        Xs = sw[:, np.newaxis] * X_chunk          # (actual, P)
+        ys = sw * y_chunk                         # (actual,)
 
-        del X_chunk, WX_chunk, w_chunk, y_chunk
+        # Symmetric rank-k update: XtWX += Xs.T @ Xs
+        # BLAS dsyrk writes into the upper triangle only, reusing
+        # the existing XtWX buffer — no temporary P×P matrix.
+        XtWX = blas.dsyrk(
+            alpha=1.0, a=Xs, beta=1.0, c=XtWX,
+            trans=1, lower=0, overwrite_c=1,
+        )
+
+        # Vector update: XtWy += Xs.T @ ys
+        XtWy += Xs.T @ ys
+
+        del X_chunk, Xs, w_chunk, y_chunk, sw, ys
 
     # ── Ridge regularisation ───────────────────────────────────────
     # The design matrix X is highly rank-deficient because interaction
@@ -108,13 +123,20 @@ def chunked_aggregate(
     # is ~1e34 — a direct solve returns garbage.  A tiny ridge fixes
     # the condition number without distorting the well-determined part.
     if ridge_lambda > 0.0:
-        XtWX += ridge_lambda * np.eye(n_interactions)
+        idx = np.arange(n_interactions)
+        XtWX[idx, idx] += ridge_lambda
 
-    # ── Solve ──────────────────────────────────────────────────────
+    # ── Solve (Cholesky on the symmetric positive-definite system) ─
+    # XtWX is symmetric (only upper triangle is valid from dsyrk).
+    # cho_factor(lower=False) reads the upper triangle and factors
+    # in-place.  cho_solve then uses the factor — no extra copies.
     try:
-        beta = np.linalg.solve(XtWX, XtWy)
+        c, low = cho_factor(XtWX, lower=False)
+        beta = cho_solve((c, low), XtWy)
     except np.linalg.LinAlgError:
-        beta = np.linalg.lstsq(XtWX, XtWy, rcond=None)[0]
+        # Fallback: lstsq on the full matrix
+        XtWX_sym = XtWX + XtWX.T - np.diag(XtWX.diagonal())
+        beta = np.linalg.lstsq(XtWX_sym, XtWy, rcond=None)[0]
 
     # ── Build InteractionValues ────────────────────────────────────
     final_index = "FWBII" if mode.lower() == "banzhaf" else "FSII"
