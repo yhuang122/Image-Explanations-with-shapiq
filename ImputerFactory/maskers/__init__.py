@@ -1,8 +1,11 @@
 """
 Masker registry — maps string names to Masker classes.
 
-To add a new masker, decorate the class with @register_masker("name").
-The factory will resolve it via config.masker.
+Registered keys: ``"vision_mean"``, ``"text_attn"``, ``"crossmodal_mean"``,
+``"crossmodal_gaussian"``, ``"attention"``.
+
+To add a new masker, decorate the class with ``@register_masker("name")``.
+The factory will resolve it via ``MaskerConfig.strategy``.
 """
 
 from .base import BaseMasker
@@ -43,4 +46,6 @@ def get_masker(name: str) -> type:
 from .vision_mean import VisionMeanMasker
 from .text_attention import TextAttentionMasker
 from .crossmodal_composite import CrossModalMeanMasker
+from .crossmodal_gaussian import CrossModalGaussianMasker
+from .attention import AttentionMasker
 

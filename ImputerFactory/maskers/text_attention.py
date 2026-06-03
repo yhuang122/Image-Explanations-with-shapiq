@@ -12,10 +12,12 @@ from . import register_masker
 from ImputerFactory.data import PhysicalMask, ProcessorOutput
 
 
-@register_masker("text")
+@register_masker("text_attn")
 class TextAttentionMasker(BaseMasker):
     """
     Pure text occlusion via attention_mask replacement.
+
+    Registered as ``"text_attn"`` in the masker registry.
 
     Contract:
         - Receives: ProcessorOutput (only attention_mask consumed) + PhysicalMask (.text_attention_mask)

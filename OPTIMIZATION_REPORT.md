@@ -81,7 +81,7 @@ X^\top W y &= \sum_{i=1}^{N} w_i \cdot \mathbf{x}_i y_i
 $$
 
 Only the $P \times P$ accumulator is persistent; each chunk builds a small
-$M \times P$ matrix ($M = \text{chunk\_size}$) that is freed immediately
+$M \times P$ matrix ($M = \text{chunksize}$) that is freed immediately
 after accumulation.
 
 #### Optimisation A: Symmetric accumulator (BLAS dsyrk)

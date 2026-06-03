@@ -13,13 +13,15 @@ from . import register_masker
 from ImputerFactory.data import PhysicalMask, ProcessorOutput
 
 
-@register_masker("vision")
+@register_masker("vision_mean")
 class VisionMeanMasker(BaseMasker):
     """
     Pure image occlusion via multiplicative binary mask.
 
     Since CLIP/SigLIP inputs are normalized (mean ≈ 0), zeroing out
     pixels is equivalent to filling with the dataset mean.
+
+    Registered as ``"vision_mean"`` in the masker registry.
 
     Contract:
         - Receives: ProcessorOutput (only pixel_values consumed) + PhysicalMask (.image_binary_mask)

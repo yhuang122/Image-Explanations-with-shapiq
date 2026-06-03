@@ -13,7 +13,6 @@ import numpy as np
 import torch
 
 from ImputerFactory.data import (
-    ImputerConfig,
     SpatialLayout,
     PhysicalMask,
     ProcessorOutput,
@@ -44,17 +43,17 @@ class ImageImputer:
         processor: Any,
         segmenter: BaseSegmenter,
         masker: BaseMasker,
-        config: ImputerConfig,
         inputs_original: ProcessorOutput,
-        inputs_raw: dict = None,  # Raw HF processor output (for backwards compat)
-        input_image: Any = None,  # PIL Image (kept for crossmodal edge cases)
-        input_text: str = "",     # Text string (kept for crossmodal edge cases)
+        inputs_raw: dict = None,   # Raw HF processor output (for backwards compat)
+        input_image: Any = None,   # PIL Image (kept for crossmodal edge cases)
+        input_text: str = "",      # Text string (kept for crossmodal edge cases)
+        use_amp: bool = False,     # torch.autocast(fp16) on CUDA
     ):
         self.model = model
         self.processor = processor
         self.segmenter = segmenter
         self.masker = masker
-        self.config = config
+        self.use_amp = use_amp
 
         # Preprocessed 1-sample inputs (owned by imputer, shared across calls)
         self.inputs_original = inputs_original
@@ -64,15 +63,13 @@ class ImageImputer:
         self.input_image = input_image
         self.input_text = input_text
 
-        # Derived from config (no direct model inspection needed here)
-        self.image_size = config.image_size
-        self.patch_size = config.patch_size
-        self.n_channels = config.n_channels
-        self.grid_size = config.grid_size
-        self.model_type = config.model_type
-
-        # Layout from segmenter
+        # Layout from segmenter — single source of truth for spatial metadata
         self.layout: SpatialLayout = segmenter.get_layout()
+        self.image_size = self.layout.image_size
+        self.patch_size = self.layout.patch_size
+        self.n_channels = self.layout.n_channels
+        self.grid_size = self.layout.grid_size
+        self.model_type = self.layout.model_type
 
     @property
     def n_players_image(self) -> int:
@@ -255,24 +252,25 @@ class ImageImputer:
                     masked = self.masker.apply(inputs_img_masked, txt_slice_mask)
                 else:
                     # Edge case: txt batch ≠ img batch.
-                    # Avoid calling the full image processor (expensive) —
-                    # reuse the already-preprocessed image tensor and only
-                    # re-tokenize the text (cheap).
+                    # Reuse the already-masked image tensor and only
+                    # re-process the text with the processor.  Some processor
+                    # adapters (e.g. OpenAICLIPAdapter) do not support
+                    # text-only calls, so always pass images as well.
                     img_only = PhysicalMask(image_binary_mask=img_slice_mask.image_binary_mask)
                     masked_img = self.masker.apply(inputs_img_masked, img_only)
 
-                    # Re-tokenize text to match txt_bs; skip image processing.
-                    # Must match _preprocess_batch's padding strategy for this model type.
-                    text_kwargs = dict(
+                    # Re-process text to match txt_bs, reusing the original image.
+                    kwargs = dict(
+                        images=[self.input_image] * txt_bs,
                         text=[self.input_text] * txt_bs,
                         return_tensors="pt",
                     )
                     if self.model_type in ("siglip", "siglip2"):
-                        text_kwargs["padding"] = "max_length"
-                        text_kwargs["max_length"] = 64
+                        kwargs["padding"] = "max_length"
+                        kwargs["max_length"] = 64
                     else:
-                        text_kwargs["padding"] = True
-                    text_raw = self.processor(**text_kwargs)
+                        kwargs["padding"] = True
+                    text_raw = self.processor(**kwargs)
                     if "attention_mask" not in text_raw:
                         text_raw["attention_mask"] = (text_raw["input_ids"] != 1).long()
 
@@ -346,7 +344,7 @@ class ImageImputer:
         """Run model forward pass. Returns raw model outputs."""
         device = next(self.model.parameters()).device
         inputs_dict = {k: v.to(device) for k, v in inputs.to_dict().items()}
-        use_amp = self.config.use_amp and device.type == "cuda"
+        use_amp = self.use_amp and device.type == "cuda"
         with torch.no_grad():
             if use_amp:
                 with torch.autocast(device_type="cuda", dtype=torch.float16):

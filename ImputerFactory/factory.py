@@ -1,14 +1,14 @@
 """
 ImageImputerFactory — Central assembly line.
 
-Inspects the model, selects optimal defaults, injects segmenters,
-and returns a fully wired ImageImputer ready for Shapley evaluation.
+Inspects the model, enriches ``SegmenterConfig`` with model metadata,
+selects components, and returns a fully wired ``ImageImputer``.
 """
 
 from typing import Optional, Any
 
 from .core.imputer import ImageImputer
-from .data import ImputerConfig, ProcessorOutput
+from .data import SegmenterConfig, MaskerConfig, ProcessorOutput
 from .segmenters.base import BaseSegmenter
 from .segmenters import get_segmenter
 from .maskers.base import BaseMasker
@@ -17,31 +17,31 @@ from .maskers import get_masker
 
 class ImageImputerFactory:
     """
-    Assembles the ImageImputer pipeline from components.
+    Assembles the ImageImputer pipeline from typed configs.
 
-    Usage:
+    Usage::
+
         factory = ImageImputerFactory()
         imputer = factory.build(model, processor, input_image, input_text)
 
-    Segmenter options:
-        - None              → auto: PatchSegmenter for ViT, SLICSegmenter for CNN
-        - "patch"           → PatchSegmenter (rigid grid, baseline for ViT)
-        - "slic"            → SLICSegmenter (perceptual superpixels, required for CNN)
-        - "gradient_guided" → GradientGuidedSegmenter (saliency-guided, opt-in)
+    Or with explicit config::
 
-    Segmenter kwargs (forwarded to segmenter constructor):
-        - For "slic":       optionally override n_segments, compactness, sigma.
-        - For "gradient_guided": optionally override model/processor/image/text
-          used for the saliency forward pass.
-        - For "patch":      no meaningful kwargs.
-        The factory auto-fills the required defaults (e.g. image_array for SLIC,
-        model/processor/image/text for gradient-guided); you only need to supply
-        overrides to change default behavior.
+        seg_cfg = SegmenterConfig(strategy="slic", slic=SlicParams(n_segments=60))
+        msk_cfg = MaskerConfig(strategy="crossmodal_mean")
+        imputer = factory.build(model, processor, img, txt,
+                                segmenter_config=seg_cfg,
+                                masker_config=msk_cfg)
 
-    Masker options:
-        - None / "crossmodal_mean" → CrossModalMeanMasker (baseline for VLMs)
-        - "vision"           → VisionMeanMasker (image-only)
-        - "text"             → TextAttentionMasker (text-only)
+    Segmenter strategies (``SegmenterConfig.strategy``):
+        - ``"patch"`` (default) — rigid grid, baseline for ViT.
+        - ``"slic"`` — perceptual superpixels, required for CNN backbones.
+        - ``"gradient_guided"`` — saliency-guided non-uniform layout.
+
+    Masker strategies (``MaskerConfig.strategy``):
+        - ``"crossmodal_mean"`` (default) — composite: vision-mean + text-attn.
+        - ``"crossmodal_gaussian"`` — composite: vision-gaussian (stub) + text-attn.
+        - ``"vision_mean"`` — image-only multiplicative mask.
+        - ``"text_attn"`` — text-only attention-mask swap.
     """
 
     def build(
@@ -50,9 +50,8 @@ class ImageImputerFactory:
         processor: Any,
         input_image: Any,
         input_text: str,
-        segmenter: Optional[str] = None,
-        segmenter_kwargs: Optional[dict] = None,
-        masker: Optional[str] = None,
+        segmenter_config: Optional[SegmenterConfig] = None,
+        masker_config: Optional[MaskerConfig] = None,
         use_amp: bool = False,
     ) -> ImageImputer:
         """
@@ -63,80 +62,70 @@ class ImageImputerFactory:
             processor: Corresponding HuggingFace processor.
             input_image: PIL Image or path.
             input_text: Text string.
-            segmenter: Optional segmenter strategy ("patch", "slic").
-            segmenter_kwargs: Optional dict forwarded to the segmenter
-                constructor. Keys depend on the segmenter type:
-                - "patch": no meaningful keys.
-                - "slic":  "n_segments", "compactness", "sigma", etc.
-                - "gradient_guided": "model", "processor", "image", "text".
-                The factory injects required defaults before instantiation
-                (e.g. image_array for SLIC), so you only need overrides.
-            masker: Optional masker strategy ("crossmodal_mean", "vision", "text").
-            use_amp: If True, model.forward runs under torch.autocast(fp16)
-                on CUDA. Useful for ViT-L/14 with large coalitions.
+            segmenter_config: Optional ``SegmenterConfig``.  ``None`` (or
+                strategy ``"patch"``) uses the default rigid-grid segmenter.
+                Strategy ``"slic"`` requires the ``image_array`` run-time
+                dependency, which the Factory passes automatically.
+            masker_config: Optional ``MaskerConfig``.  ``None`` (or strategy
+                ``"crossmodal_mean"``) uses the default composite masker.
+            use_amp: If True, model.forward runs under ``torch.autocast(fp16)``
+                on CUDA.  Useful for ViT-L/14 with large coalitions.
 
         Returns:
-            Configured ImageImputer ready for forward_1d / forward_crossmodal.
+            Configured ``ImageImputer`` ready for ``forward_1d`` /
+            ``forward_crossmodal``.
         """
-        # ── 1. Infer model type ─────────────────────────────────────────
-        # Keep each build isolated; the factory mutates this copy to inject
-        # required per-image defaults such as SLIC's image_array.
-        segmenter_kwargs = dict(segmenter_kwargs or {})
+        # ── 0. Default configs (caller may provide overrides) ───────────
+        if segmenter_config is None:
+            segmenter_config = SegmenterConfig()
+        if masker_config is None:
+            masker_config = MaskerConfig()
 
+        # ── 1. Infer model type ─────────────────────────────────────────
         model_type = self._infer_model_type(model)
 
         # ── 2. Extract model dimensions (ViT or CNN backbone) ──────────
         image_size, patch_size, n_channels = self._extract_vision_dims(model)
         is_vit = patch_size > 0
         grid_size = image_size // patch_size if is_vit else 0
-        # n_players_image is provisional for ViT (grid²) and resolved later
-        # for SLIC (the actual superpixel count comes from skimage).
-        n_players_image = grid_size ** 2 if is_vit else 0
+        n_players_image = grid_size ** 2 if is_vit else 0  # provisional
 
         # ── 3. Preprocess once to determine text players ─────────────────
         inputs_dict = self._preprocess(processor, input_image, input_text, model_type)
         n_players_text = self._count_text_players(inputs_dict, model_type)
         text_total_length = inputs_dict["input_ids"].shape[1]
 
-        # ── 4. Build shared config ──────────────────────────────────────
-        config = ImputerConfig(
-            model_type=model_type,
-            image_size=image_size,
-            patch_size=patch_size,
-            n_channels=n_channels,
-            n_players_image=n_players_image,
-            n_players_text=n_players_text,
-            grid_size=grid_size,
-            text_total_length=text_total_length,
-            segmenter=segmenter,
-            masker=masker,
-            segmenter_kwargs=segmenter_kwargs,  # populated by segmenter strategies in future
-            use_amp=use_amp,
-        )
+        # ── 4. Enrich SegmenterConfig with model metadata ───────────────
+        segmenter_config.model_type = model_type
+        segmenter_config.image_size = image_size
+        segmenter_config.patch_size = patch_size
+        segmenter_config.n_channels = n_channels
+        segmenter_config.grid_size = grid_size
+        segmenter_config.n_players_image = n_players_image
+        segmenter_config.n_players_text = n_players_text
+        segmenter_config.text_total_length = text_total_length
 
-        # ── 5. Select Segmenter ────────────────────────────────────────
-        # Default routing: ViT → patch grid, CNN backbone → SLIC superpixels.
-        # Caller can override by passing segmenter="patch"/"slic" explicitly.
-        if config.segmenter is None:
-            config.segmenter = "patch" if is_vit else "slic"
-        if config.segmenter == "slic":
-            # SLIC needs the raw image to plan superpixels (CPU once).
-            config.segmenter_kwargs.setdefault("image_array", input_image)
-        if config.segmenter == "gradient_guided":
-            # GradientGuidedSegmenter needs model/processor/image/text for
-            # the forward+backward pass that extracts the saliency map.
-            config.segmenter_kwargs.setdefault("model", model)
-            config.segmenter_kwargs.setdefault("processor", processor)
-            config.segmenter_kwargs.setdefault("image", input_image)
-            config.segmenter_kwargs.setdefault("text", input_text)
-        segmenter = self._create_segmenter(config)
-        # SLIC determines the real player count at __init__; sync config.
-        config.n_players_image = segmenter.get_layout().n_players_image
+        # ── 5. Create Segmenter (per-strategy dispatch) ──────────────────
+        strategy = segmenter_config.strategy
+        if strategy == "slic":
+            segmenter = self._create_segmenter(
+                segmenter_config, image_array=input_image,
+            )
+        elif strategy == "gradient_guided":
+            segmenter = self._create_segmenter(
+                segmenter_config,
+                model=model, processor=processor,
+                image=input_image, text=input_text,
+            )
+        else:
+            # "patch" or any unrecognized strategy → defaults to patch
+            segmenter = self._create_segmenter(segmenter_config)
 
-        # ── 6. Select Masker (default: "crossmodal_mean") ────────────────────
-        if config.masker is None:
-            config.masker = "crossmodal_mean"
-        masker = self._create_masker(config)
+        # Sync actual player count from layout (SLIC count may differ)
+        segmenter_config.n_players_image = segmenter.get_layout().n_players_image
+
+        # ── 6. Create Masker ────────────────────────────────────────────
+        masker = self._create_masker(masker_config)
 
         # ── 7. Build the standardized 1-sample inputs ───────────────────
         inputs_original = ProcessorOutput(
@@ -152,11 +141,11 @@ class ImageImputerFactory:
             processor=processor,
             segmenter=segmenter,
             masker=masker,
-            config=config,
             inputs_original=inputs_original,
             inputs_raw=inputs_dict,
             input_image=input_image,
             input_text=input_text,
+            use_amp=use_amp,
         )
 
     # ─── Internal helpers ─────────────────────────────────────────────────
@@ -186,9 +175,9 @@ class ImageImputerFactory:
         """
         Return (image_size, patch_size, n_channels).
 
-        ViT backbones expose `patch_size` via `model.vision_model.embeddings`.
-        CNN backbones (e.g. CLIP-RN50) do not — fall back to `vision_config`
-        and return patch_size=0 to signal "no rigid grid". The Factory uses
+        ViT backbones expose ``patch_size`` via ``model.vision_model.embeddings``.
+        CNN backbones (e.g. CLIP-RN50) do not — fall back to ``vision_config``
+        and return patch_size=0 to signal "no rigid grid".  The Factory uses
         the zero to route to SLICSegmenter automatically.
         """
         vision = model.vision_model
@@ -239,14 +228,14 @@ class ImageImputerFactory:
         return 0
 
     @staticmethod
-    def _create_segmenter(config: ImputerConfig) -> BaseSegmenter:
+    def _create_segmenter(config: SegmenterConfig, **extra_kwargs) -> BaseSegmenter:
         """Look up and instantiate the Segmenter via registry."""
-        cls = get_segmenter(config.segmenter)
-        return cls(config=config)
+        cls = get_segmenter(config.strategy)
+        return cls(config=config, **extra_kwargs)
 
     @staticmethod
-    def _create_masker(config: ImputerConfig) -> BaseMasker:
+    def _create_masker(config: MaskerConfig) -> BaseMasker:
         """Look up and instantiate the Masker via registry."""
-        cls = get_masker(config.masker)
-        return cls()
+        cls = get_masker(config.strategy)
+        return cls(config=config)
 

@@ -14,13 +14,13 @@ would introduce out-of-distribution artefacts at block boundaries; SLIC
 follows perceptual content, keeping each player's pixels visually coherent.
 """
 
-from typing import Optional
+from typing import Optional, Any
 import numpy as np
 import torch
 
 from .base import BaseSegmenter
 from . import register_segmenter
-from ImputerFactory.data import ImputerConfig, SpatialLayout, PhysicalMask
+from ImputerFactory.data import SegmenterConfig, SpatialLayout, PhysicalMask
 
 # scikit-image is declared in env.yml. Lazy-imported here so static analysis
 # can still inspect this module if the dep is missing in a stripped env.
@@ -35,17 +35,20 @@ class SLICSegmenter(BaseSegmenter):
     """
     Perceptual superpixel segmenter for VLMs (especially CNN backbones).
 
-    Required segmenter_kwargs:
-        image_array (PIL.Image | np.ndarray): the raw input image,
-            populated automatically by the Factory.
+    Args:
+        config: ``SegmenterConfig`` with strategy ``"slic"``.  Model
+            metadata (``image_size``, ``n_channels``, …) must already be
+            populated by the Factory.
+        image_array: The raw input image (``PIL.Image`` or ``np.ndarray``).
+            The Factory passes this automatically when ``strategy="slic"``.
 
-    Optional segmenter_kwargs:
-        n_segments (int):  target superpixel count (default 49).
-        compactness (float): SLIC compactness (default 10.0).
-        sigma (float):     pre-smoothing Gaussian sigma (default 0.0).
+    Strategy parameters (via ``config.slic``):
+        ``n_segments`` (int): target superpixel count (default 49).
+        ``compactness`` (float): SLIC compactness (default 10.0).
+        ``sigma`` (float): pre-smoothing Gaussian sigma (default 0.0).
     """
 
-    def __init__(self, config: ImputerConfig):
+    def __init__(self, config: SegmenterConfig, image_array: Any = None):
         super().__init__(config)
         if _skimage_slic is None:
             raise ImportError(
@@ -59,17 +62,15 @@ class SLICSegmenter(BaseSegmenter):
         self.model_type = config.model_type
         self.text_total_length = config.text_total_length
 
-        kwargs = config.segmenter_kwargs or {}
-        image_array = kwargs.get("image_array")
         if image_array is None:
             raise ValueError(
-                "SLICSegmenter requires segmenter_kwargs['image_array'] "
-                "(the raw input image). The Factory populates this when "
-                "segmenter='slic' is selected."
+                "SLICSegmenter requires ``image_array`` (the raw input image). "
+                "The Factory passes this automatically when ``strategy='slic'`` "
+                "is selected."
             )
-        n_segments = int(kwargs.get("n_segments", 49))
-        compactness = float(kwargs.get("compactness", 10.0))
-        sigma = float(kwargs.get("sigma", 0.0))
+        n_segments = int(config.slic.n_segments)
+        compactness = float(config.slic.compactness)
+        sigma = float(config.slic.sigma)
 
         # ── CPU planning (once) ────────────────────────────────────────
         image_rgb = self._coerce_rgb_uint8(image_array, self.image_size)

@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 import numpy as np
 
-from ImputerFactory.data import ImputerConfig, SpatialLayout, PhysicalMask
+from ImputerFactory.data import SegmenterConfig, SpatialLayout, PhysicalMask
 
 
 class BaseSegmenter(ABC):
@@ -15,13 +15,14 @@ class BaseSegmenter(ABC):
     convert coalition arrays into PhysicalMasks.
 
     Lifecycle:
-        1. __init__(config) → receive shared ImputerConfig
+        1. __init__(config) → receive SegmenterConfig (caller params +
+           Factory-populated model metadata)
         2. get_layout()    → produce SpatialLayout (called once per image)
         3. generate_masks(coalitions_image, coalitions_text) → PhysicalMask
            (called many times during Shapley sampling)
     """
 
-    def __init__(self, config: ImputerConfig):
+    def __init__(self, config: SegmenterConfig):
         self.config = config
 
     @abstractmethod

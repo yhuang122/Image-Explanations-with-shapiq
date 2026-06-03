@@ -4,7 +4,7 @@ import torch
 
 from .base import BaseSegmenter
 from . import register_segmenter
-from ImputerFactory.data import ImputerConfig, SpatialLayout, PhysicalMask
+from ImputerFactory.data import SegmenterConfig, SpatialLayout, PhysicalMask
 
 
 @register_segmenter("patch")
@@ -16,7 +16,7 @@ class PatchSegmenter(BaseSegmenter):
     (CLIP, SigLIP) since their vision encoders natively operate on patches.
     """
 
-    def __init__(self, config: ImputerConfig):
+    def __init__(self, config: SegmenterConfig):
         super().__init__(config)
         self.image_size = config.image_size
         self.patch_size = config.patch_size

@@ -3,6 +3,11 @@ Standardized data transfer formats for the ImageImputer pipeline.
 
 All modules communicate through these well-defined objects,
 ensuring a clean separation of concerns and framework-agnostic interfaces.
+
+Configuration has been migrated to typed ``SegmenterConfig`` and
+``MaskerConfig`` (see below).  ``ImputerConfig`` is removed — model
+metadata flows through ``SegmenterConfig`` (populated by the Factory)
+and spatial metadata through ``SpatialLayout``.
 """
 
 from dataclasses import dataclass, field
@@ -10,48 +15,148 @@ from typing import Optional
 import torch
 
 
-# ─── Imputer Configuration ────────────────────────────────────────────────────
-# Produced by: ImageImputerFactory (once during build)
-# Consumed by: Segmenter, Masker, ImageImputer (shared read-only reference)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Segmenter Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+# Produced by: callers (strategy + params) + ImageImputerFactory (model metadata)
+# Consumed by: all Segmenters
 
 @dataclass
-class ImputerConfig:
-    """
-    Read-only configuration produced by the Factory during assembly.
-    All components receive this shared object so Segmenter block size
-    and other parameters flow cleanly across the pipeline.
+class PatchParams:
+    """Rigid-grid patch segmenter parameters.  No configurable knobs."""
+    pass
+
+
+@dataclass
+class SlicParams:
+    """SLIC superpixel segmentation parameters.
 
     Attributes:
-        model_type: 'clip', 'siglip', or 'siglip2'.
-        image_size: Height/width of the input image in pixels.
-        patch_size: Edge length of the ViT patch embedding.
-        n_channels: Number of image channels (typically 3).
-        n_players_image: Number of image players (grid_size² for patches).
-        n_players_text: Number of text players (tokens after stripping BOS/EOS).
-        grid_size: Number of patches per side (image_size // patch_size).
-        text_total_length: Total token length expected by the model (e.g., 64).
-        segmenter: Optional segmenter strategy name ('patch', 'slic', etc.).
-        masker: Optional masker strategy name.
-        segmenter_kwargs: Extra parameters forwarded to the Segmenter
-            (e.g., n_segments for SLIC). Factory populates
-            defaults; callers may override before passing to build().
-        use_amp: If True, run model forward under torch.autocast(fp16).
-            Only takes effect when the model is on a CUDA device.
-            Off by default — SigLIP's sigmoid head is fp16-sensitive,
-            so callers opt in explicitly (e.g. for ViT-L/14).
+        n_segments: Target superpixel count (default 49, ≈ 7×7 grid).
+        compactness: SLIC compactness factor (higher = more regular shapes).
+        sigma: Pre-segmentation Gaussian blur sigma.
     """
-    model_type: str
-    image_size: int
-    patch_size: int
-    n_channels: int
-    n_players_image: int
-    n_players_text: int
-    grid_size: int
-    text_total_length: int
-    segmenter: Optional[str] = None
-    masker: Optional[str] = None
-    segmenter_kwargs: dict = field(default_factory=dict)
-    use_amp: bool = False
+    n_segments: int = 49
+    compactness: float = 10.0
+    sigma: float = 0.0
+
+
+@dataclass
+class GradientGuidedParams:
+    """Gradient-guided saliency segmentation parameters.
+
+    Attributes:
+        n_segments: Target superpixel count.  ``None`` means derive from
+            ``grid_size`` (ViT) or fall back to 49.
+    """
+    n_segments: Optional[int] = None
+
+
+@dataclass
+class SegmenterConfig:
+    """
+    Complete configuration for a Segmenter.
+
+    Fields are in two categories:
+
+    * **Caller-provided**: ``strategy`` + per-strategy params
+      (``patch`` / ``slic`` / ``gradient_guided``).
+    * **Factory-populated**: model metadata (``image_size``, ``patch_size``,
+      ``model_type``, …).  Callers do NOT set these — the Factory fills
+      them during :meth:`~ImageImputerFactory.build` via model introspection.
+
+    Default strategy is ``"patch"`` (backward-compatible).
+    """
+
+    # ── Caller-provided ──────────────────────────────────────────────────
+    strategy: str = "patch"
+    patch: PatchParams = field(default_factory=PatchParams)
+    slic: SlicParams = field(default_factory=SlicParams)
+    gradient_guided: GradientGuidedParams = field(default_factory=GradientGuidedParams)
+
+    # ── Factory-populated (model metadata) ───────────────────────────────
+    model_type: str = ""
+    image_size: int = 0
+    patch_size: int = 0
+    n_channels: int = 3
+    grid_size: int = 0
+    n_players_image: int = 0
+    n_players_text: int = 0
+    text_total_length: int = 0
+
+    @property
+    def active_params(self):
+        """Return the params dataclass for the active strategy."""
+        return getattr(self, self.strategy, None)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Masker Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+# Produced by: callers (strategy + params)
+# Consumed by: all Maskers
+
+@dataclass
+class CrossModalMeanParams:
+    """Cross-modal occlusion (composite: vision-mean + text-attention).
+    No configurable parameters."""
+    pass
+
+
+@dataclass
+class CrossModalGaussianParams:
+    """
+    Cross-modal occlusion (composite: vision-gaussian + text-attention).
+    No configurable parameters.
+
+    .. note::
+        Skeleton only — the Gaussian-mean image occlusion is not yet
+        implemented.
+    """
+    pass
+
+
+@dataclass
+class VisionMeanParams:
+    """Pure image occlusion via multiplicative binary mask.
+    No configurable parameters."""
+    pass
+
+
+@dataclass
+class TextAttentionParams:
+    """Pure text occlusion via attention_mask replacement.
+    No configurable parameters."""
+    pass
+
+
+@dataclass
+class MaskerConfig:
+    """
+    Complete configuration for a Masker.
+
+    Fields in two categories:
+
+    * **Caller-provided**: ``strategy`` + per-strategy params.
+    * The Factory may enrich with model metadata if needed (currently unused).
+
+    Default strategy is ``"crossmodal_mean"`` (backward-compatible).
+
+    Future maskers (e.g. ``AttentionMasker``) will add their own params
+    dataclass here and extend ``strategy`` with a new value.
+    """
+
+    # ── Caller-provided ──────────────────────────────────────────────────
+    strategy: str = "crossmodal_mean"
+    crossmodal_mean: CrossModalMeanParams = field(default_factory=CrossModalMeanParams)
+    crossmodal_gaussian: CrossModalGaussianParams = field(default_factory=CrossModalGaussianParams)
+    vision_mean: VisionMeanParams = field(default_factory=VisionMeanParams)
+    text_attn: TextAttentionParams = field(default_factory=TextAttentionParams)
+
+    @property
+    def active_params(self):
+        """Return the params dataclass for the active strategy."""
+        return getattr(self, self.strategy, None)
 
 
 # ─── Spatial Layout ───────────────────────────────────────────────────────────
