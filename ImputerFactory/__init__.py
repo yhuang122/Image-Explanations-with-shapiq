@@ -11,8 +11,10 @@ Exports:
     SpatialLayout             — Player-to-pixel spatial mapping.
     PatchSegmenter            — Rigid-grid segmenter (VLM baseline).
     VisionMeanMasker          — Pure image occlusion (multiplicative mask).
+    VisionBlurMasker          — Gaussian blur occlusion (pre-computed kernel, conv2d).
     TextAttentionMasker       — Pure text occlusion (attention_mask swap).
-    CrossModalMeanMasker — Composite: VisionMeanMasker + TextAttentionMasker.
+    CrossModalMeanMasker      — Composite: VisionMeanMasker + TextAttentionMasker.
+    CrossModalBlurMasker      — Composite: VisionBlurMasker + TextAttentionMasker.
     CrossModalGaussianMasker  — Composite: GaussianMean (stub) + TextAttentionMasker.
 """
 
@@ -35,8 +37,10 @@ from .data import (
 from .segmenters.patch import PatchSegmenter
 from .maskers import (
     VisionMeanMasker,
+    VisionBlurMasker,
     TextAttentionMasker,
     CrossModalMeanMasker,
+    CrossModalBlurMasker,
     CrossModalGaussianMasker,
 )
 from .regression import crossmodal_approximation, chunked_aggregate
