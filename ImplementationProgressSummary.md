@@ -202,10 +202,10 @@ Recorded AID values are smoke/integration outputs; strict ±5% reporting should 
 
 | # | Task | Details | Blocked by | Status |
 |---|---|---|---|---|
-| P8.1 | Integration design review | Review and finalize `shapiq_imputer_integration_design.md`; align team on PR scope | — | 🔄 In review |
-| P8.2 | Port abstract contracts | Move `BaseSegmenter`, `BaseMasker`, data types to `shapiq/imputer/vision/base.py` | P8.1 ✅ | ⬜ Not started |
-| P8.3 | Port PatchSegmenter + VisionMeanMasker + VisionBlurMasker | Minimal viable pipeline: PatchSegmenter + VisionMeanMasker/VisionBlurMasker → VisionImputer → VisionLanguageGame | P8.2 ✅ | ⬜ Not started |
-| P8.4 | Write upstream tests + example | Tests for segmenter/masker/imputer; minimal CLIP example notebook | P8.3 ✅ | ⬜ Not started |
+| P8.1 | Integration design review | Review and finalize `shapiq_imputer_integration_design.md`; align team on PR scope | — | ✅ Done |
+| P8.2 | Port abstract contracts | Move `BaseSegmenter`, `BaseMasker`, data types to `shapiq/imputer/vision/base.py` | P8.1 ✅ | ✅ Done |
+| P8.3 | Port PatchSegmenter + VisionMeanMasker + VisionImputer + VisionLanguageGame | Core pipeline: PatchSegmenter + VisionMeanMasker → VisionImputer → VisionLanguageGame | P8.2 ✅ | ✅ Done |
+| P8.4 | Write upstream tests + example notebook | 18 unit tests + `docs/examples/vision_language_clip.ipynb` | P8.3 ✅ | ✅ Done |
 | P8.5 | Submit PR to mmschlk/shapiq | Open PR with abstract bases + one concrete pipeline | P8.4 ✅ | ⬜ Not started |
 | P8.6 | Adopt upstream in our project | Replace `ImputerFactory` imports with `shapiq.imputer.vision`; validate equivalence | P8.5 ✅ (merged) | ⬜ Not started |
 
