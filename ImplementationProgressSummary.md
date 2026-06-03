@@ -1,6 +1,6 @@
 # ImageImputer — Implementation Progress Summary
 
-> Last updated: 2026-06-02
+> Last updated: 2026-06-03
 
 ## Implementation Progress Summary
 
@@ -20,7 +20,9 @@
 | | `VisionMeanMasker` | ✅ Done | Pure image occlusion (registered as ``"vision_mean"``) |
 | | `TextAttentionMasker` | ✅ Done | Pure text occlusion (registered as ``"text_attn"``) |
 | | `CrossModalMeanMasker` | ✅ Done | Composite (``"crossmodal_mean"``), default for VLMs |
-| | `CrossModalGaussianMasker` | ⏳ Skeleton | Composite (``"crossmodal_gaussian"``): text-attn + GaussianMean stub |
+| | `VisionBlurMasker` | ⬜ Not started | Gaussian blur occlusion; pre-computed kernel via conv2d |
+| | `CrossModalBlurMasker` | ⬜ Not started | Composite (``"crossmodal_blur"``): VisionBlurMasker + TextAttentionMasker |
+| | `CrossModalGaussianMasker` | ⏳ Skeleton | Will be replaced by `VisionBlurMasker` + `CrossModalBlurMasker` |
 | | `AttentionMasker` | ⏳ Stub | Needs negative-infinity self-attention injection |
 | **Core** | `ImageImputer` | ✅ Done | `forward_1d` + `forward_crossmodal` with batching & device mgmt |
 | **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalMeanMasker |
@@ -165,6 +167,7 @@ Recorded AID values are smoke/integration outputs; strict ±5% reporting should 
 | # | Feature | Details | Status |
 |---|---|---|---|
 | B3.1 | `AttentionMasker` implementation | Hook self-attention, inject -inf mask matrices. Requires PyTorch `register_forward_hook` or HF `output_attentions` override | ⬜ Not started |
+| B3.2 | `VisionBlurMasker` implementation | Gaussian blur occlusion: pre-compute kernel (σ=3.0), apply via conv2d, blend masked regions. Replaces old `CrossModalGaussianMasker` skeleton | ⬜ Not started |
 
 #### B4. Backend Adapter Extraction (PyTorch only)
 
@@ -172,6 +175,10 @@ Recorded AID values are smoke/integration outputs; strict ±5% reporting should 
 |---|---|---|---|
 | B4.1 | `TorchOps` extraction | Move inline PyTorch ops from Imputer/Segmenter into adapter | ⬜ Not started |
 
+| # | Task | Details | Status |
+|---|---|---|---|
+| B5.1 | `_repeat_inputs` memory | Replace `.expand().clone()` with stride tricks |✅ Done (Needs profiling validation)
+| B5.2 | AMP support | `torch.autocast` for mixed-precision forward passes | ✅ Done (Opt-in, needs numeric validation)
 #### B6. Evaluation Infrastructure — Extract Reusable Libraries
 
 > **B6 does NOT run independent experiments.** Its job is to extract shared evaluation logic (AID curve computation, faithfulness metrics, plotting) from **already-migrated** Team A experiments into reusable libraries. Team A owns the experiment scripts; B6 owns the tooling those scripts import.
@@ -183,14 +190,24 @@ Recorded AID values are smoke/integration outputs; strict ±5% reporting should 
 | B6.1 | AID curve library | Extract reusable AID computation + plotting from migrated A1.2 (`insertion_deletion.py`) and A1.7 (`explain_mscoco.py`). Must NOT re-implement experiment logic — only factor out common code | A1.2 ✅ / A1.7 ✅ | 🔄 Ongoing |
 | B6.2 | Faithfulness evaluation library | Extract reusable faithfulness metrics + harness from migrated A1.1 (`faithfulness.py`). Compare metrics before/after migration | A1.1 ✅ | ⬜ Not started |
 
-| # | Task | Details | Status |
-|---|---|---|---|
-| B5.1 | `_repeat_inputs` memory | Replace `.expand().clone()` with stride tricks |✅ Done (Needs profiling validation)
-| B5.2 | AMP support | `torch.autocast` for mixed-precision forward passes | ✅ Done (Opt-in, needs numeric validation)
+
 
 ---
 
 ### PM — Coordination & Oversight (1 person)
+
+#### P8. shapiq Imputer Integration (PM-owned)
+
+> **Design doc**: `shapiq_imputer_integration_design.md`
+
+| # | Task | Details | Blocked by | Status |
+|---|---|---|---|---|
+| P8.1 | Integration design review | Review and finalize `shapiq_imputer_integration_design.md`; align team on PR scope | — | 🔄 In review |
+| P8.2 | Port abstract contracts | Move `BaseSegmenter`, `BaseMasker`, data types to `shapiq/imputer/vision/base.py` | P8.1 ✅ | ⬜ Not started |
+| P8.3 | Port PatchSegmenter + VisionMeanMasker + VisionBlurMasker | Minimal viable pipeline: PatchSegmenter + VisionMeanMasker/VisionBlurMasker → VisionImputer → VisionLanguageGame | P8.2 ✅ | ⬜ Not started |
+| P8.4 | Write upstream tests + example | Tests for segmenter/masker/imputer; minimal CLIP example notebook | P8.3 ✅ | ⬜ Not started |
+| P8.5 | Submit PR to mmschlk/shapiq | Open PR with abstract bases + one concrete pipeline | P8.4 ✅ | ⬜ Not started |
+| P8.6 | Adopt upstream in our project | Replace `ImputerFactory` imports with `shapiq.imputer.vision`; validate equivalence | P8.5 ✅ (merged) | ⬜ Not started |
 
 | # | Responsibility | Status |
 |---|---|---|
@@ -200,6 +217,7 @@ Recorded AID values are smoke/integration outputs; strict ±5% reporting should 
 | P4 | Review API decisions (naming, data formats, public surface) | 🔄 Ongoing |
 | P5 | Sign off on experiment migration checkpoints (A1.1–A1.8) | ⬜ Pending |
 | P6 | Maintain comparison harness (A2.1) as gatekeeper for merges | ⬜ Pending |
+| P7 | Coordinate shapiq/imputer integration design (see `shapiq_imputer_integration_design.md`) | 🔄 In progress |
 
 ---
 
@@ -235,6 +253,7 @@ A1.1–A1.8 (migrate experiments)    B2.1 SLICSegmenter
 | A3 (cross-model) | A1 completion | All experiments pass |
 | B6.1 (AID curve lib) | A1.2 + A1.7 migrated | Team A migration |
 | B6.2 (faithfulness lib) | A1.1 migrated | Team A migration |
+| P8 (shapiq integration) | Integration design approved (P8.1) | P8.1 |
 
 ---
 
@@ -246,6 +265,8 @@ A1.1–A1.8 (migrate experiments)    B2.1 SLICSegmenter
 | W2 | A1.5–A1.8, A2.2–A2.3 | B2.1 (SLICSegmenter) | All 8 experiments pass |
 | W3 | A3.1–A3.5 (cross-model) | B2a (CLIP-ResNet validation) | SLIC + ResNet workflow green |
 | W4 | A4 (feedback loop) | B6.1–B6.2 (extract eval libs from A1.1/A1.2/A1.7) | Feature freeze, integration test |
+| W5 | — | P8.1–P8.4 (integration design + upstream PR) | PR submitted |
+| W6 | — | P8.5–P8.6 (PR review + adopt upstream) | Upstream PR merged; our project on upstream shapiq |
 
 ---
 
