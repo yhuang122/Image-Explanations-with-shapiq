@@ -94,9 +94,9 @@
 
 | # | Task | Details | Status |
 |---|---|---|---|
-| A2.1 | Build comparison harness | Script that runs same coalitions through `src` Game and `Game` Game, diffing outputs | 🔄 In progress  |
-| A2.2 | Snapshot baseline | Save reference outputs from all 8 experiments using `src` path | ⬜ Not started |
-| A2.3 | CI-style gate | Exit code ≠ 0 if any experiment deviates > 1e-4 from baseline | ⬜ Not started |
+| A2.1 | Build comparison harness | Script that runs same coalitions through `src` Game and `Game` Game, diffing outputs | ✅ Done  |
+| A2.2 | Snapshot baseline | Save reference outputs from all 8 experiments using `src` path | ✅ Done |
+| A2.3 | CI-style gate | Exit code ≠ 0 if any experiment deviates > 1e-4 from baseline | ✅ Done |
 
 #### A3. Cross-Model Adoption Tests
 
