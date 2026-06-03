@@ -152,16 +152,36 @@ def draw_fancy_hyper_edges(
 def plot_sentence(
     iv: shapiq.InteractionValues,
     sentence: list[str],
+    fontsize: int = 14,
+    max_score: float | None = None,
     **kwargs,
 ) -> tuple[plt.Figure, plt.Axes]:
+    attributions = [float(iv[(i,)]) for i in range(len(sentence))]
+    max_abs = max_score if max_score is not None else (max(abs(a) for a in attributions) or 1.0)
 
-    sentence_plot = iv.plot_sentence(
-        words=sentence,
-        show=False,
-        **kwargs,
-    )
+    fig, ax = plt.subplots(figsize=(max(6, len(sentence) * 1.3), 1.2))
+    ax.set_xlim(0, len(sentence))
+    ax.set_ylim(-0.5, 0.5)
+    ax.axis("off")
 
-    return sentence_plot
+    for i, (word, attr) in enumerate(zip(sentence, attributions)):
+        norm = np.clip(attr / max_abs, -1.0, 1.0)
+        if norm >= 0:
+            r, g, b = RED.get_red(), RED.get_green(), RED.get_blue()
+        else:
+            r, g, b = BLUE.get_red(), BLUE.get_green(), BLUE.get_blue()
+        bg = (r, g, b, abs(norm))
+        text_color = "white" if abs(norm) > 0.67 else "black"
+        ax.text(
+            i + 0.5, 0, word,
+            ha="center", va="center",
+            fontsize=fontsize,
+            color=text_color,
+            bbox=dict(boxstyle="round,pad=0.35", facecolor=bg, edgecolor="none"),
+            transform=ax.transData,
+        )
+
+    return fig, ax
 
 
 def value_to_color(value: float) -> tuple[float, float, float]:
