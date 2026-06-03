@@ -26,9 +26,9 @@ The original `FIxLIP.aggregate()` + `solve_regression()` pipeline materialises t
 
 | # | Object | Shape | Size (SigLIP, $2^{16}$) | Alive during step |
 |---|---|---|---|---|
-| 1 | `regression_matrix` ($X$) | $(N, P)$ | **10.51 GiB** | aggregate → solve |
-| 2 | `WX = diag($w$) @ $X$` | $(N, P)$ | **10.51 GiB** | solve only |
-| 3 | `$X^\top W X$` result | $(P, P)$ | **3.45 GiB** | factorised in-place by solve |
+| 1 | regression_matrix ($X$) | $(N, P)$ | **10.51 GiB** | aggregate → solve |
+| 2 | WX = diag($w$) @ $X$ | $(N, P)$ | **10.51 GiB** | solve only |
+| 3 | $X^\top W X$ result | $(P, P)$ | **3.45 GiB** | factorised in-place by solve |
 | | **Peak** | | **24.48 GiB** | all three simultaneously |
 
 Adding GPU memory (~4 GiB for SigLIP): **~28.5 GiB total** — a 24 GiB machine inevitably OOMs.
