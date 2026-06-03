@@ -45,24 +45,24 @@ factory.build(model, processor, input_image, input_text)
 │     └─ CLIP: input_ids.size(1) - 2 = 10 - 2 = 8
 │     └─ n_players_text = 8, text_total_length = 10
 │
-├─ 5. Build ImputerConfig
-│     └─ ImputerConfig(model_type="clip", image_size=224, patch_size=32,
-│         n_channels=3, n_players_image=49, n_players_text=8,
-│         grid_size=7, text_total_length=10, segmenter="patch",
-│         masker="crossmodal", segmenter_kwargs={})
+├─ 5. Enrich SegmenterConfig with model metadata
+│     └─ segmenter_config.model_type = "clip"
+│     └─ segmenter_config.image_size = 224, patch_size = 32, ...
+│     └─ segmenter_config.n_players_image = 49 (grid²)
+│     └─ segmenter_config.n_players_text = 8
 │
-├─ 6. _create_segmenter(config)
-│     └─ get_segmenter("patch") → PatchSegmenter (registry lookup)
+├─ 6. Create Segmenter (per-strategy dispatch)
+│     └─ get_segmenter("patch") → PatchSegmenter(config=segmenter_config)
 │     └─ Produces SpatialLayout(n_players_image=49, n_players_text=8, ...)
 │
-├─ 7. _create_masker(config)
-│     └─ get_masker("crossmodal_mean") → CrossModalMeanMasker (registry lookup)
+├─ 7. Create Masker
+│     └─ get_masker("crossmodal_mean") → CrossModalMeanMasker(config=masker_config)
 │         └─ Internally: VisionMeanMasker + TextAttentionMasker
 │
 ├─ 8. Build ProcessorOutput + assemble ImageImputer
 │     └─ inputs_original: ProcessorOutput(pixel_values, input_ids, attention_mask)
 │     └─ inputs_raw: raw HF dict (preserves .tokens() etc.)
-│     └─ config passed to ImageImputer  ← shared across all components
+│     └─ use_amp passed directly to ImageImputer
 │     └─ input_image, input_text stored on imputer (for crossmodal edge cases)
 │
 └─ Returns: ImageImputer(model, processor, segmenter, masker, inputs_original, ...)

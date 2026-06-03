@@ -4,7 +4,8 @@ ImageImputerFactory — Modular, framework-agnostic image imputation pipeline.
 Exports:
     ImageImputerFactory       — Central assembly line.
     ImageImputer              — Core orchestration engine.
-    ImputerConfig             — Shared configuration (model metadata + segmenter + masker).
+    SegmenterConfig           — Typed segmenter configuration (strategy + params + metadata).
+    MaskerConfig              — Typed masker configuration (strategy + params).
     ProcessorOutput           — Standardized model input format.
     PhysicalMask              — Concrete pixel/token-level mask.
     SpatialLayout             — Player-to-pixel spatial mapping.
@@ -12,15 +13,30 @@ Exports:
     VisionMeanMasker          — Pure image occlusion (multiplicative mask).
     TextAttentionMasker       — Pure text occlusion (attention_mask swap).
     CrossModalMeanMasker — Composite: VisionMeanMasker + TextAttentionMasker.
+    CrossModalGaussianMasker  — Composite: GaussianMean (stub) + TextAttentionMasker.
 """
 
 from .factory import ImageImputerFactory
 from .core.imputer import ImageImputer
-from .data import ImputerConfig, ProcessorOutput, PhysicalMask, SpatialLayout
+from .data import (
+    SegmenterConfig,
+    MaskerConfig,
+    PatchParams,
+    SlicParams,
+    GradientGuidedParams,
+    CrossModalMeanParams,
+    CrossModalGaussianParams,
+    VisionMeanParams,
+    TextAttentionParams,
+    ProcessorOutput,
+    PhysicalMask,
+    SpatialLayout,
+)
 from .segmenters.patch import PatchSegmenter
 from .maskers import (
     VisionMeanMasker,
     TextAttentionMasker,
     CrossModalMeanMasker,
+    CrossModalGaussianMasker,
 )
 from .regression import crossmodal_approximation, chunked_aggregate

@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Optional, Dict
 import torch
 
-from ImputerFactory.data import PhysicalMask, ProcessorOutput
+from ImputerFactory.data import PhysicalMask, ProcessorOutput, MaskerConfig
 
 
 class BaseMasker(ABC):
@@ -13,10 +13,13 @@ class BaseMasker(ABC):
     (from the Segmenter) and produces modified inputs ready for model.forward().
 
     Lifecycle:
-        1. __init__(...)   → configure occlusion strategy
+        1. __init__(config)   → receive MaskerConfig (strategy + per-strategy params)
         2. apply(processor_output, physical_mask) → modified ProcessorOutput
            (called for every batch during Shapley sampling)
     """
+
+    def __init__(self, config: Optional[MaskerConfig] = None):
+        self.config = config or MaskerConfig()
 
     @abstractmethod
     def apply(

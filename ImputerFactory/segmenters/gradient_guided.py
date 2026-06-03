@@ -9,17 +9,17 @@ Algorithm:
     2. generate_masks (per batch): map region-level coalitions → pixel-level
        binary masks via a single fancy-index operation.
 
-Required segmenter_kwargs (populated by Factory):
+Runtime dependencies (passed by Factory via constructor):
     model, processor, image (PIL), text (str)
 """
 
-from typing import Optional
+from typing import Optional, Any
 import numpy as np
 import torch
 
 from .base import BaseSegmenter
 from . import register_segmenter
-from ImputerFactory.data import ImputerConfig, SpatialLayout, PhysicalMask
+from ImputerFactory.data import SegmenterConfig, SpatialLayout, PhysicalMask
 
 try:
     from skimage.segmentation import slic as _skimage_slic
@@ -35,9 +35,27 @@ class GradientGuidedSegmenter(BaseSegmenter):
     aggregates them into a saliency map, and uses SLIC superpixels
     to produce a non-uniform spatial division that puts more
     players in high-saliency regions.
+
+    Args:
+        config: ``SegmenterConfig`` with strategy ``"gradient_guided"``.
+        model: HuggingFace VLM for the gradient-extraction forward pass.
+        processor: Corresponding HF processor.
+        image: PIL Image for preprocessing.
+        text: Text string for preprocessing.
+
+    Strategy parameters (via ``config.gradient_guided``):
+        ``n_segments`` (int | None): target superpixel count.
+        ``None`` means derive from ``grid_size`` or fall back to 49.
     """
 
-    def __init__(self, config: ImputerConfig):
+    def __init__(
+        self,
+        config: SegmenterConfig,
+        model: Any = None,
+        processor: Any = None,
+        image: Any = None,
+        text: str = None,
+    ):
         super().__init__(config)
         if _skimage_slic is None:
             raise ImportError(
@@ -53,19 +71,13 @@ class GradientGuidedSegmenter(BaseSegmenter):
         self.text_total_length = config.text_total_length
         self.grid_size = config.grid_size
 
-        kwargs = config.segmenter_kwargs or {}
-        model = kwargs.get("model")
-        processor = kwargs.get("processor")
-        image = kwargs.get("image")
-        text = kwargs.get("text")
-
         self._saliency: Optional[np.ndarray] = None
 
         if model is None or processor is None or image is None or text is None:
             raise ValueError(
-                "GradientGuidedSegmenter requires segmenter_kwargs: "
-                "model, processor, image, text. The Factory populates these "
-                "when segmenter='gradient_guided' is selected."
+                "GradientGuidedSegmenter requires ``model``, ``processor``, "
+                "``image``, and ``text``.  The Factory passes these "
+                "automatically when ``strategy='gradient_guided'`` is selected."
             )
 
         # ── GPU: gradient extraction + SLIC on saliency ─────────────────
@@ -100,8 +112,8 @@ class GradientGuidedSegmenter(BaseSegmenter):
         self._saliency = saliency
 
         # 5. SLIC superpixels on the saliency map
-        # Priority: segmenter_kwargs > grid-based > hardcoded default.
-        n_segments_kw = config.segmenter_kwargs.get("n_segments", None)
+        # Priority: typed param > grid-based > hardcoded default.
+        n_segments_kw = config.gradient_guided.n_segments
         if n_segments_kw is not None:
             n_segments = int(n_segments_kw)
         elif self.grid_size > 0:

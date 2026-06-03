@@ -6,7 +6,7 @@
 
 | Module | Component | Status | Notes |
 |---|---|---|---|
-| **Data Types** | `ImputerConfig` | ✅ Done | Shared read-only config: model metadata + segmenter + masker + segmenter_kwargs |
+| **Data Types** | `SegmenterConfig` / `MaskerConfig` | ✅ Done | Typed configs: strategy + per-strategy params + Factory-populated model metadata. ImputerConfig removed. |
 | | `SpatialLayout` | ✅ Done | Player↔pixel/token mapping metadata |
 | | `PhysicalMask` | ✅ Done | Concrete masks: `image_binary_mask` (N,C,H,W) + `text_attention_mask` (N,L) |
 | | `ProcessorOutput` | ✅ Done | Standardized HuggingFace inputs wrapper |
@@ -17,9 +17,10 @@
 | | `AdaptiveSegmenter` | 🔬 Future | Future exploration: coarse-to-fine subdivision logic |
 | | `HybridSegmenter` | ❌ Out of scope | Not planned for current phase |
 | **Maskers** | `BaseMasker` | ✅ Done | Abstract: `apply(ProcessorOutput, PhysicalMask)` |
-| | `VisionMeanMasker` | ✅ Done | Pure image occlusion via multiplicative binary mask (out-of-place) |
-| | `TextAttentionMasker` | ✅ Done | Pure text occlusion via attention_mask replacement |
-| | `CrossModalMeanMasker` | ✅ Done | Composite Pattern: delegates to VisionMeanMasker + TextAttentionMasker |
+| | `VisionMeanMasker` | ✅ Done | Pure image occlusion (registered as ``"vision_mean"``) |
+| | `TextAttentionMasker` | ✅ Done | Pure text occlusion (registered as ``"text_attn"``) |
+| | `CrossModalMeanMasker` | ✅ Done | Composite (``"crossmodal_mean"``), default for VLMs |
+| | `CrossModalGaussianMasker` | ⏳ Skeleton | Composite (``"crossmodal_gaussian"``): text-attn + GaussianMean stub |
 | | `AttentionMasker` | ⏳ Stub | Needs negative-infinity self-attention injection |
 | **Core** | `ImageImputer` | ✅ Done | `forward_1d` + `forward_crossmodal` with batching & device mgmt |
 | **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalMeanMasker |
