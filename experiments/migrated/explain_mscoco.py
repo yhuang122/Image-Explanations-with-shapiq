@@ -84,8 +84,8 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/explain', config=args) as run:
             processor,
             input_image,
             input_text,
-            segmenter=None,
-            masker=None,
+            segmenter_config=None,
+            masker_config=None,
         )
         game = VisionLanguageGame(
             imputer,

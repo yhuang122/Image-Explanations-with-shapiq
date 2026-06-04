@@ -21,7 +21,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import src  # noqa: E402
 from Game import VisionLanguageGame  # noqa: E402
-from ImputerFactory import ImageImputerFactory  # noqa: E402
+from ImputerFactory import ImageImputerFactory, MaskerConfig, SegmenterConfig  # noqa: E402
 
 DEFAULT_CLIP_MODEL = "openai/clip-vit-base-patch32"
 
@@ -116,7 +116,14 @@ def build_games(case: dict, device: torch.device):
     old_game = src.game_huggingface.VisionLanguageGame(
         model, processor, input_image=image, input_text=text, batch_size=case["batch_size"]
     )
-    imputer = ImageImputerFactory().build(model, processor, image, text, segmenter=None, masker=None)
+    imputer = ImageImputerFactory().build(
+        model,
+        processor,
+        image,
+        text,
+        segmenter_config=SegmenterConfig(),
+        masker_config=MaskerConfig(),
+    )
     new_game = VisionLanguageGame(imputer, batch_size=case["batch_size"])
 
     return old_game, new_game

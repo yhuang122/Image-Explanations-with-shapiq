@@ -64,7 +64,14 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
             break
         input_image = Image.open(os.path.join(PATH_INPUT, f'{i}.jpg'))
 
-        imputer = factory.build(model, processor, input_image, input_text, segmenter=None, masker=None)
+        imputer = factory.build(
+            model,
+            processor,
+            input_image,
+            input_text,
+            segmenter_config=None,
+            masker_config=None,
+        )
         game = VisionLanguageGame(
             imputer,
             batch_size=BATCH_SIZE

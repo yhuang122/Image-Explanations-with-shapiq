@@ -14,3 +14,5 @@ python .\experiments\validation\summarize_results.py
 
 Reads comparison CSV files from `experiments/validation/results/` and writes `experiments/validation/results/summary.csv`.
 It also writes `experiments/validation/results/max_abs_diff_summary.png`.
+
+Benchmark note: future benchmark runs should validate the complete pipeline end-to-end, not only the value-function equivalence harness.
