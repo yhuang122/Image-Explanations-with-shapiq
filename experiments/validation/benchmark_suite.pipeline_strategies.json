@@ -1,0 +1,47 @@
+{
+  "name": "pipeline_strategies_mscoco100_clip_b32",
+  "defaults": {
+    "num_coalitions": 1000,
+    "batch_size": 16,
+    "tolerance": 0.0001,
+    "cuda": true,
+    "use_amp": false
+  },
+  "cases": [
+    "faithfulness",
+    "insertion_deletion"
+  ],
+  "inputs": [
+    "data/input/wds_mscoco_captions_test_100"
+  ],
+  "models": [
+    "clip-vit-b-32"
+  ],
+  "strategies": [
+    {
+      "name": "patch_crossmodal_mean",
+      "segmenter": "patch",
+      "masker": "crossmodal_mean"
+    },
+    {
+      "name": "patch_vision_mean",
+      "segmenter": "patch",
+      "masker": "vision_mean"
+    },
+    {
+      "name": "patch_text_attn",
+      "segmenter": "patch",
+      "masker": "text_attn"
+    },
+    {
+      "name": "slic_crossmodal_mean",
+      "segmenter": "slic",
+      "masker": "crossmodal_mean",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      }
+    }
+  ]
+}
