@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 from dataclasses import asdict
 from collections import defaultdict
@@ -69,12 +70,32 @@ def model_token(case: dict) -> str:
     return slug(case["model_preset"])
 
 
+def run_hash(case: dict, length: int = 12) -> str:
+    payload = {
+        "case": case["case"],
+        "input_path": str(case["input_path"]),
+        "text": case["text"],
+        "model_preset": case["model_preset"],
+        "model_name": case["model_name"],
+        "segmenter": case["segmenter_config"].strategy,
+        "segmenter_params": active_params(case["segmenter_config"]),
+        "masker": case["masker_config"].strategy,
+        "masker_params": active_params(case["masker_config"]),
+        "random_state": case["random_state"],
+        "num_coalitions": case["num_coalitions"],
+        "batch_size": case["batch_size"],
+    }
+    text = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:length]
+
+
 def run_name(case: dict) -> str:
     return (
         f"{case['case']}_{case['input_path'].stem}_"
         f"model_{model_token(case)}_"
-        f"text_{slug(case['text'])}_seg_{slug(segmenter_token(case['segmenter_config']))}_"
-        f"mask_{slug(case['masker_config'].strategy)}_rs{case['random_state']}_n{case['num_coalitions']}"
+        f"seg_{slug(segmenter_token(case['segmenter_config']))}_"
+        f"mask_{slug(case['masker_config'].strategy)}_"
+        f"{run_hash(case)}"
     )
 
 
@@ -395,7 +416,7 @@ def write_original_summary(output_dir: Path, reports: list[dict]) -> dict:
     summary_path = output_dir / "original_pipeline.csv"
     tmp_summary_path = summary_path.with_suffix(f"{summary_path.suffix}.tmp")
     fieldnames = (
-        "case", "input_path", "model_preset", "model_name", "text", "comparison_type",
+        "case", "input_path", "model_preset", "model_name", "text", "text_full", "text_source", "comparison_type",
         "n_players", "n_players_image", "n_players_text", "num_coalitions", "batch_size",
         "random_state", "model_load_runtime_s", "original_game_build_runtime_s",
         "original_anchor_runtime_s", "original_pipeline_runtime_s", "total_runtime_s",

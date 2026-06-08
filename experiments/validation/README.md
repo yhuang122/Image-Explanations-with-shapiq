@@ -24,7 +24,7 @@ python .\experiments\validation\benchmark_games.py --case insertion_deletion --i
 
 ## Pipeline Presets
 
-The preset JSON files use `data/input/wds_mscoco_captions_test_100`. Input directories must contain `manifest.csv`; the benchmark reads each row's `filename` and uses its `caption` column as text input.
+The preset JSON files use `data/input/wds_mscoco_captions_test_100`. Input directories must contain `manifest.csv`; the benchmark reads each row's `filename` and uses `first_caption` as the model text input. The full `caption` column is preserved in result CSVs as `text_full`.
 
 | Preset | Purpose | Planned runs |
 |---|---|---:|
@@ -123,6 +123,14 @@ experiments/validation/results/<preset-name>/
 ```
 
 The CSV records the full run context, model metadata, segmenter/masker strategy metadata, original pipeline outputs, migrated pipeline outputs, output differences when player layouts match, and runtime fields.
+
+Run CSV filenames are intentionally short:
+
+```text
+<case>_<image_stem>_model_<model>_seg_<segmenter>_mask_<masker>_<short_hash>_comparison.csv
+```
+
+The full text input, full caption, model parameters, strategy parameters, and sampling parameters are stored inside the CSV instead of the filename.
 
 Strict numerical equivalence should use `patch/crossmodal_mean`, because it preserves the original patch-based player layout. Strategies such as `slic` or `gradient_guided` are benchmark strategies; their player layout differs from the original pipeline, so coalition-by-coalition equivalence is not directly meaningful.
 

@@ -82,7 +82,7 @@ CASES = {
 RUN_CONTEXT_FIELDS = (
     "case", "input_path", "strategy_name",
     "original_pipeline", "migrated_pipeline", "model_preset", "model_name",
-    "model_type", "text", "comparison_type", "comparison_mode",
+    "model_type", "text", "text_full", "text_source", "comparison_type", "comparison_mode",
     "device", "use_amp",
 )
 STRATEGY_FIELDS = (

@@ -314,6 +314,8 @@ def build_benchmark_report(
         "model_name": case["model_name"],
         "model_type": imputer.model_type,
         "text": case["text"],
+        "text_full": case["text_full"],
+        "text_source": case["text_source"],
         "device": str(device),
         "use_amp": bool(case["use_amp"]),
         "segmenter_strategy": case["segmenter_config"].strategy,
@@ -436,7 +438,7 @@ def run_strategy_comparison(
     return report
 
 
-def run_original_pipeline(case: dict, model_bundle: dict, input_path: Path, text: str) -> dict:
+def run_original_pipeline(case: dict, model_bundle: dict, input_path: Path, text: str, text_full: str, text_source: str) -> dict:
     import src
 
     total_start = perf_counter()
@@ -453,6 +455,8 @@ def run_original_pipeline(case: dict, model_bundle: dict, input_path: Path, text
         "model_preset": case["model_preset"],
         "model_name": case["model_name"],
         "text": text,
+        "text_full": text_full,
+        "text_source": text_source,
         "comparison_type": case["comparison_type"],
         "n_players": int(old_game.n_players),
         "n_players_image": int(old_game.n_players_image),
@@ -471,12 +475,21 @@ def run_original_pipeline(case: dict, model_bundle: dict, input_path: Path, text
     }
 
 
-def build_strategy_case(args: argparse.Namespace, model_case: dict, input_path: Path, spec: dict) -> dict:
+def build_strategy_case(
+    args: argparse.Namespace,
+    model_case: dict,
+    input_path: Path,
+    spec: dict,
+    text_full: str,
+    text_source: str,
+) -> dict:
     case = dict(model_case)
     case.update(
         case=args.case,
         input_path=input_path,
         text=args.text,
+        text_full=text_full,
+        text_source=text_source,
         random_state=args.random_state,
         num_coalitions=args.num_coalitions,
         batch_size=args.batch_size,
@@ -520,6 +533,8 @@ def run_suite(args: argparse.Namespace, suite: dict, output_dir: Path) -> list[d
                 for sample in resolve_input_samples(input_entry, args.text):
                     input_path = sample["path"]
                     text = sample["text"]
+                    text_full = sample["text_full"]
+                    text_source = sample["text_source"]
                     run_args = runtime_args(
                         case_name=case_name,
                         text=text,
@@ -535,11 +550,20 @@ def run_suite(args: argparse.Namespace, suite: dict, output_dir: Path) -> list[d
                                 model_bundle,
                                 input_path,
                                 text,
+                                text_full,
+                                text_source,
                             )
                         )
                     else:
                         for spec in suite["strategies"]:
-                            strategy_case = build_strategy_case(run_args, model_case, input_path, spec)
+                            strategy_case = build_strategy_case(
+                                run_args,
+                                model_case,
+                                input_path,
+                                spec,
+                                text_full,
+                                text_source,
+                            )
                             existing_report = None if args.force else read_existing_report(
                                 comparison_csv_path(output_dir, strategy_case)
                             )

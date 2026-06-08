@@ -1,5 +1,0 @@
-model_name,text,n_players,n_players_image,n_players_text,num_coalitions,batch_size,tolerance,max_abs_diff,mean_abs_diff,passed,coalition_index,image_coalition_index,text_coalition_index,coalition_size,image_coalition_size,text_coalition_size,reference_value,candidate_value,abs_diff
-openai/clip-vit-base-patch32,dog,50,49,1,4,2,0.0001,0.0,0.0,True,0,,,0,,,23.023147583007812,23.023147583007812,0.0
-openai/clip-vit-base-patch32,dog,50,49,1,4,2,0.0001,0.0,0.0,True,1,,,50,,,28.93102264404297,28.93102264404297,0.0
-openai/clip-vit-base-patch32,dog,50,49,1,4,2,0.0001,0.0,0.0,True,2,,,27,,,22.779903411865234,22.779903411865234,0.0
-openai/clip-vit-base-patch32,dog,50,49,1,4,2,0.0001,0.0,0.0,True,3,,,29,,,28.023635864257812,28.023635864257812,0.0

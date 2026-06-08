@@ -46,15 +46,17 @@ def sample_from_manifest_row(directory: Path, row: dict) -> dict:
     filename = row.get("filename")
     if not filename:
         raise ValueError("Manifest rows must include a filename column.")
+    first_caption = row.get("first_caption", "").strip()
     caption = row.get("caption", "").strip()
-    if not caption:
-        raise ValueError("Manifest rows must include a non-empty caption column.")
+    text = first_caption or caption
+    if not text:
+        raise ValueError("Manifest rows must include a non-empty first_caption or caption column.")
     path = directory / filename
     if not path.exists():
         raise FileNotFoundError(f"Manifest image file not found: {path}")
     if path.suffix.lower() not in IMAGE_SUFFIXES:
         raise ValueError(f"Manifest file is not a supported image: {path}")
-    return {"path": path, "text": caption}
+    return {"path": path, "text": text, "text_full": caption, "text_source": "first_caption" if first_caption else "caption"}
 
 
 def resolve_input_samples(input_path: str | None, text: str | None = None) -> list[dict]:
@@ -67,7 +69,7 @@ def resolve_input_samples(input_path: str | None, text: str | None = None) -> li
             raise ValueError(f"Input file is not a supported image: {path}")
         if not text:
             raise ValueError("Single-image input requires --text.")
-        return [{"path": path, "text": text}]
+        return [{"path": path, "text": text, "text_full": text, "text_source": "cli_text"}]
 
     if text:
         raise ValueError("Batch directory input reads manifest.csv; --text is only for single-image input.")
