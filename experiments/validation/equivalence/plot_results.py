@@ -1,10 +1,18 @@
+"""Plot pipeline equivalence benchmark results from saved CSV files."""
+
 from __future__ import annotations
 
 import argparse
 import csv
 from pathlib import Path
 
-from benchmark_outputs import CSV_DIRNAME, PLOT_MODES, PLOTS_DIRNAME, write_benchmark_plots
+from benchmark_outputs import (
+    CSV_DIRNAME,
+    PLOT_MODES,
+    PLOTS_DIRNAME,
+    fill_legacy_scope_fields,
+    write_benchmark_plots,
+)
 from benchmark_schema import PROJECT_ROOT, SUMMARY_FIELDS as BENCHMARK_FIELDS
 
 UNIFIED_REQUIRED_FIELDS = {
@@ -18,7 +26,7 @@ SUMMARY_FIELDS = ("result_name", *BENCHMARK_FIELDS)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Summarize and plot benchmark CSV files.")
+    parser = argparse.ArgumentParser(description="Plot pipeline equivalence benchmark CSV files.")
     parser.add_argument(
         "--input",
         required=True,
@@ -60,6 +68,7 @@ def read_summary_row(path: Path) -> dict:
         or values["coalition_mean_abs_output_diff"]
         or values["empty_full_anchor_mean_abs_output_diff"]
     )
+    fill_legacy_scope_fields(values)
     return {"result_name": name, **values}
 
 

@@ -1,38 +1,17 @@
-"""Output helpers for validation benchmarks."""
+"""Plot helpers for equivalence and coverage benchmarks."""
 
 from __future__ import annotations
 
 import csv
-import hashlib
-import json
-from dataclasses import asdict
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 
-from benchmark_schema import (
-    BENCHMARK_SUMMARY_FIELDS,
-    RESULTS_DIR,
-    ROW_FIELDS,
-    SUMMARY_FIELDS,
-    slug,
-)
-
 
 PLOTS_DIRNAME = "plots"
 CSV_DIRNAME = "csv"
-RUNS_DIRNAME = CSV_DIRNAME
 PLOT_MODES = ("strict", "models", "strategies", "crossmodal")
-
-
-def active_params(config) -> dict:
-    params = config.active_params
-    return asdict(params) if params is not None else {}
-
-
-def compact_json(value: dict) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
 def parse_report_float(report: dict, field: str):
@@ -40,203 +19,6 @@ def parse_report_float(report: dict, field: str):
     if value in (None, ""):
         return None
     return float(value)
-
-
-def max_output_diff_metric(report: dict) -> float:
-    coalition_diff = parse_report_float(report, "coalition_max_abs_output_diff")
-    if coalition_diff is not None:
-        return coalition_diff
-    return float(report["empty_full_anchor_max_abs_output_diff"])
-
-
-def mean_output_diff_metric(report: dict) -> float:
-    coalition_diff = parse_report_float(report, "coalition_mean_abs_output_diff")
-    if coalition_diff is not None:
-        return coalition_diff
-    return float(report["empty_full_anchor_mean_abs_output_diff"])
-
-
-def segmenter_token(config) -> str:
-    if config.strategy == "slic":
-        params = config.slic
-        return f"slic{params.n_segments}_c{params.compactness:g}_s{params.sigma:g}"
-    if config.strategy == "gradient_guided":
-        n_segments = config.gradient_guided.n_segments
-        return f"gradient_guided{n_segments if n_segments is not None else 'auto'}"
-    return config.strategy
-
-
-def model_token(case: dict) -> str:
-    if case["model_preset"] == "custom":
-        return slug(case["model_name"], max_length=64)
-    return slug(case["model_preset"])
-
-
-def run_hash(case: dict, length: int = 12) -> str:
-    payload = {
-        "case": case["case"],
-        "input_path": str(case["input_path"]),
-        "text": case["text"],
-        "model_preset": case["model_preset"],
-        "model_name": case["model_name"],
-        "segmenter": case["segmenter_config"].strategy,
-        "segmenter_params": active_params(case["segmenter_config"]),
-        "masker": case["masker_config"].strategy,
-        "masker_params": active_params(case["masker_config"]),
-        "random_state": case["random_state"],
-        "num_coalitions": case["num_coalitions"],
-        "batch_size": case["batch_size"],
-    }
-    text = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:length]
-
-
-def run_name(case: dict) -> str:
-    return (
-        f"{case['case']}_{case['input_path'].stem}_"
-        f"model_{model_token(case)}_"
-        f"seg_{slug(segmenter_token(case['segmenter_config']))}_"
-        f"mask_{slug(case['masker_config'].strategy)}_"
-        f"{run_hash(case)}"
-    )
-
-
-def suite_output_dir(name: str) -> Path:
-    return RESULTS_DIR / name
-
-
-def comparison_csv_path(output_dir: Path, case: dict) -> Path:
-    return output_dir / RUNS_DIRNAME / f"{run_name(case)}_comparison.csv"
-
-
-def read_existing_report(csv_path: Path) -> dict | None:
-    if not csv_path.exists():
-        return None
-    with csv_path.open(newline="", encoding="utf-8") as file:
-        reader = csv.DictReader(file)
-        fieldnames = set(reader.fieldnames or [])
-        if not set(SUMMARY_FIELDS).issubset(fieldnames):
-            return None
-        row = next(reader, None)
-    if not row:
-        return None
-
-    report = {field: row.get(field, "") for field in SUMMARY_FIELDS}
-    report["result_paths"] = {"csv": str(csv_path)}
-    report["_resumed"] = True
-    return report
-
-
-def maybe_float(value) -> float | str:
-    if value is None:
-        return ""
-    return float(value)
-
-
-def value_row(row_type: str, index, old_output, new_output: float, diff, **coalition_fields) -> dict:
-    row = {"row_type": row_type, "coalition_index": index, **coalition_fields}
-    row.update(
-        original_pipeline_coalition_output=maybe_float(old_output),
-        migrated_pipeline_coalition_output=float(new_output),
-        abs_coalition_output_diff=maybe_float(diff),
-    )
-    return row
-
-
-def iter_anchor_rows(report: dict):
-    yield value_row(
-        "anchor_empty",
-        "empty",
-        report["original_pipeline_empty_coalition_output"],
-        report["migrated_pipeline_empty_coalition_output"],
-        report["abs_empty_coalition_output_diff"],
-        image_coalition_index="",
-        text_coalition_index="",
-        coalition_size=0,
-        image_coalition_size=0,
-        text_coalition_size=0,
-    )
-    yield value_row(
-        "anchor_full",
-        "full",
-        report["original_pipeline_full_coalition_output"],
-        report["migrated_pipeline_full_coalition_output"],
-        report["abs_full_coalition_output_diff"],
-        image_coalition_index="",
-        text_coalition_index="",
-        coalition_size=report["n_players"],
-        image_coalition_size=report["n_players_image"],
-        text_coalition_size=report["n_players_text"],
-    )
-
-
-def iter_result_rows(inputs: dict, old_pipeline_values: np.ndarray | None, new_pipeline_values: np.ndarray):
-    diffs = None if old_pipeline_values is None else np.abs(old_pipeline_values - new_pipeline_values)
-    if inputs["comparison_type"] == "crossmodal":
-        image_coalitions = inputs["image_coalitions"]
-        text_coalitions = inputs["text_coalitions"]
-        for index, (image_index, text_index) in enumerate(np.ndindex(len(image_coalitions), len(text_coalitions))):
-            image_coalition = image_coalitions[image_index]
-            text_coalition = text_coalitions[text_index]
-            yield value_row(
-                "coalition",
-                index,
-                None if old_pipeline_values is None else old_pipeline_values[index],
-                new_pipeline_values[index],
-                None if diffs is None else diffs[index],
-                image_coalition_index=image_index,
-                text_coalition_index=text_index,
-                coalition_size=int(np.sum(image_coalition) + np.sum(text_coalition)),
-                image_coalition_size=int(np.sum(image_coalition)),
-                text_coalition_size=int(np.sum(text_coalition)),
-            )
-        return
-
-    old_outputs = [None] * len(new_pipeline_values) if old_pipeline_values is None else old_pipeline_values
-    differences = [None] * len(new_pipeline_values) if diffs is None else diffs
-    for index, (coalition, old_output, new_output, diff) in enumerate(
-        zip(inputs["coalitions"], old_outputs, new_pipeline_values, differences)
-    ):
-        yield value_row(
-            "coalition",
-            index,
-            old_output,
-            new_output,
-            diff,
-            image_coalition_index="",
-            text_coalition_index="",
-            coalition_size=int(np.sum(coalition)),
-            image_coalition_size="",
-            text_coalition_size="",
-        )
-
-
-def write_results(
-    output_dir: Path,
-    case: dict,
-    report: dict,
-    inputs: dict,
-    old_pipeline_values: np.ndarray | None,
-    new_pipeline_values: np.ndarray,
-) -> dict:
-    csv_path = comparison_csv_path(output_dir, case)
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = csv_path.with_suffix(f"{csv_path.suffix}.tmp")
-
-    with tmp_path.open("w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=SUMMARY_FIELDS + ROW_FIELDS)
-        writer.writeheader()
-        for anchor_row in iter_anchor_rows(report):
-            row = {field: report[field] for field in SUMMARY_FIELDS}
-            row.update(anchor_row)
-            writer.writerow(row)
-        for result_row in iter_result_rows(inputs, old_pipeline_values, new_pipeline_values):
-            row = {field: report[field] for field in SUMMARY_FIELDS}
-            row.update(result_row)
-            writer.writerow(row)
-
-    tmp_path.replace(csv_path)
-    return {"csv": str(csv_path)}
 
 
 def write_top_bar_plot(
@@ -352,14 +134,6 @@ def write_heatmap(path: Path, rows: list[str], cols: list[str], matrix: np.ndarr
     fig.tight_layout()
     fig.savefig(path, dpi=160)
     plt.close(fig)
-
-
-def report_top_label(report: dict) -> str:
-    return (
-        f"{Path(report['input_path']).stem}\n"
-        f"{report['case']} | {report['model_preset']}\n"
-        f"{report['strategy_name']}"
-    )
 
 
 def benchmark_max_diff(report: dict) -> float:
@@ -607,33 +381,6 @@ def write_runtime_scatter(path: Path, reports: list[dict], title: str) -> None:
     plt.close(fig)
 
 
-def write_sample_runtime_line(path: Path, reports: list[dict], title: str) -> None:
-    import matplotlib.pyplot as plt
-
-    rows = []
-    for report in sorted(reports, key=lambda item: str(item.get("input_path", ""))):
-        runtime = parse_report_float(report, "migrated_pipeline_runtime_s")
-        if runtime is not None:
-            rows.append(runtime)
-    if not rows:
-        return
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    x = np.arange(len(rows))
-    mean_runtime = float(np.mean(rows))
-    fig, ax = plt.subplots(figsize=(10, 4.8))
-    ax.plot(x, rows, marker="o", linewidth=1.8)
-    ax.axhline(mean_runtime, color="tab:red", linestyle="--", linewidth=1.2, label=f"mean {mean_runtime:.2f}s")
-    ax.set_xlabel("Image-text sample index")
-    ax.set_ylabel("Migrated pipeline runtime per run (s)")
-    ax.set_title(title)
-    ax.grid(axis="y", alpha=0.25)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(path, dpi=160)
-    plt.close(fig)
-
-
 def write_paired_sample_runtime_line(path: Path, reports: list[dict], title: str) -> None:
     import matplotlib.pyplot as plt
 
@@ -772,8 +519,8 @@ def write_strategy_table(csv_dir: Path, plots_dir: Path, groups: list[dict], tit
         ]
         for group in groups
     ]
-    csv_path = csv_dir / "strategies_coverage_table.csv"
-    image_path = plots_dir / "strategies_coverage_table.png"
+    csv_path = csv_dir / "equivalence_strategies_coverage_table.csv"
+    image_path = plots_dir / "equivalence_strategies_coverage_table.png"
     write_table_csv(csv_path, headers, rows)
     write_table_image(
         image_path,
@@ -783,8 +530,8 @@ def write_strategy_table(csv_dir: Path, plots_dir: Path, groups: list[dict], tit
         col_widths=[0.22, 0.08, 0.10, 0.15, 0.17, 0.14, 0.14],
     )
     return {
-        "strategies_coverage_csv": str(csv_path),
-        "strategies_coverage_table": str(image_path),
+        "equivalence_strategies_coverage_csv": str(csv_path),
+        "equivalence_strategies_coverage_table": str(image_path),
     }
 
 
@@ -809,28 +556,30 @@ def strict_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
         write_coverage_outputs(
             csv_dir,
             plots_dir,
-            "strict",
+            "equivalence_strict",
             f"Strict equivalence summary by case\n{context}",
             groups,
             "Validation case",
         )
     )
     write_histogram(
-        plots_dir / "strict_max_output_diff_distribution.png",
+        plots_dir / "equivalence_strict_max_output_diff_distribution.png",
         [benchmark_max_diff(report) for report in reports],
         "Max |original output - migrated output|",
         f"Strict equivalence: output-difference distribution\n{context}",
         tolerance=tolerance_value(reports),
     )
     write_group_runtime_plot(
-        plots_dir / "strict_runtime_by_case.png",
+        plots_dir / "equivalence_strict_runtime_by_case.png",
         groups,
         f"Strict equivalence: runtime comparison by case\n{context}",
     )
     outputs.update(
         {
-            "strict_max_output_diff_distribution": str(plots_dir / "strict_max_output_diff_distribution.png"),
-            "strict_runtime_by_case": str(plots_dir / "strict_runtime_by_case.png"),
+            "equivalence_strict_max_output_diff_distribution": str(
+                plots_dir / "equivalence_strict_max_output_diff_distribution.png"
+            ),
+            "equivalence_strict_runtime_by_case": str(plots_dir / "equivalence_strict_runtime_by_case.png"),
         }
     )
     return outputs
@@ -844,20 +593,24 @@ def models_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
         write_coverage_outputs(
             csv_dir,
             plots_dir,
-            "models",
+            "equivalence_models",
             f"Model coverage summary\n{context}",
             groups,
             "Vision-language model",
         )
     )
-    write_pass_rate_plot(plots_dir / "models_pass_rate.png", groups, f"Pipeline pass rate by model\n{context}")
+    write_pass_rate_plot(
+        plots_dir / "equivalence_models_pass_rate.png",
+        groups,
+        f"Pipeline equivalence pass rate by model\n{context}",
+    )
     write_group_runtime_plot(
-        plots_dir / "models_runtime_by_model.png",
+        plots_dir / "equivalence_models_runtime_by_model.png",
         groups,
         f"Runtime comparison by model\n{context}",
     )
     write_group_metric_plot(
-        plots_dir / "models_max_output_diff_by_model.png",
+        plots_dir / "equivalence_models_max_output_diff_by_model.png",
         groups,
         "max_diff",
         "Max |original output - migrated output|",
@@ -866,9 +619,11 @@ def models_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
     )
     outputs.update(
         {
-            "models_pass_rate": str(plots_dir / "models_pass_rate.png"),
-            "models_runtime_by_model": str(plots_dir / "models_runtime_by_model.png"),
-            "models_max_output_diff_by_model": str(plots_dir / "models_max_output_diff_by_model.png"),
+            "equivalence_models_pass_rate": str(plots_dir / "equivalence_models_pass_rate.png"),
+            "equivalence_models_runtime_by_model": str(plots_dir / "equivalence_models_runtime_by_model.png"),
+            "equivalence_models_max_output_diff_by_model": str(
+                plots_dir / "equivalence_models_max_output_diff_by_model.png"
+            ),
         }
     )
     return outputs
@@ -878,20 +633,20 @@ def strategies_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dic
     outputs = {}
     groups = strategy_summary(reports)
     context = experiment_context(reports)
-    outputs.update(write_strategy_table(csv_dir, plots_dir, groups, f"Strategy coverage summary\n{context}"))
+    outputs.update(write_strategy_table(csv_dir, plots_dir, groups, f"Strategy equivalence coverage summary\n{context}"))
     write_single_runtime_plot(
-        plots_dir / "strategies_migrated_runtime_by_strategy.png",
+        plots_dir / "equivalence_strategies_migrated_runtime_by_strategy.png",
         groups,
         f"Migrated pipeline runtime by strategy\n{context}",
     )
     write_strategy_baseline_deviation_plot(
-        plots_dir / "strategies_baseline_deviation_by_strategy.png",
+        plots_dir / "equivalence_strategies_baseline_deviation_by_strategy.png",
         groups,
         f"Baseline output deviation for comparable strategies\n{context}",
     )
     rows, cols, matrix = group_mean(reports, "case", "strategy_name", "migrated_pipeline_runtime_s")
     write_heatmap(
-        plots_dir / "strategies_runtime_case_heatmap.png",
+        plots_dir / "equivalence_strategies_runtime_case_heatmap.png",
         rows,
         cols,
         matrix,
@@ -900,9 +655,15 @@ def strategies_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dic
     )
     outputs.update(
         {
-            "strategies_migrated_runtime_by_strategy": str(plots_dir / "strategies_migrated_runtime_by_strategy.png"),
-            "strategies_baseline_deviation_by_strategy": str(plots_dir / "strategies_baseline_deviation_by_strategy.png"),
-            "strategies_runtime_case_heatmap": str(plots_dir / "strategies_runtime_case_heatmap.png"),
+            "equivalence_strategies_migrated_runtime_by_strategy": str(
+                plots_dir / "equivalence_strategies_migrated_runtime_by_strategy.png"
+            ),
+            "equivalence_strategies_baseline_deviation_by_strategy": str(
+                plots_dir / "equivalence_strategies_baseline_deviation_by_strategy.png"
+            ),
+            "equivalence_strategies_runtime_case_heatmap": str(
+                plots_dir / "equivalence_strategies_runtime_case_heatmap.png"
+            ),
         }
     )
     return outputs
@@ -916,58 +677,42 @@ def crossmodal_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dic
         write_coverage_outputs(
             csv_dir,
             plots_dir,
-            "crossmodal",
+            "equivalence_crossmodal",
             f"Crossmodal equivalence summary\n{context}",
             groups,
             "Crossmodal validation case",
         )
     )
     write_histogram(
-        plots_dir / "crossmodal_max_output_diff_distribution.png",
+        plots_dir / "equivalence_crossmodal_max_output_diff_distribution.png",
         [benchmark_max_diff(report) for report in reports],
         "Max |original output - migrated output|",
         f"Crossmodal equivalence: output-difference distribution\n{context}",
         tolerance=tolerance_value(reports),
     )
     write_runtime_scatter(
-        plots_dir / "crossmodal_original_vs_migrated_runtime.png",
+        plots_dir / "equivalence_crossmodal_original_vs_migrated_runtime.png",
         reports,
         f"Crossmodal runtime scatter: original baseline vs migrated pipeline\n{context}",
     )
     write_paired_sample_runtime_line(
-        plots_dir / "crossmodal_runtime_by_sample.png",
+        plots_dir / "equivalence_crossmodal_runtime_by_sample.png",
         reports,
         f"Crossmodal runtime by image-text sample\n{context}",
     )
     outputs.update(
         {
-            "crossmodal_max_output_diff_distribution": str(plots_dir / "crossmodal_max_output_diff_distribution.png"),
-            "crossmodal_original_vs_migrated_runtime": str(plots_dir / "crossmodal_original_vs_migrated_runtime.png"),
-            "crossmodal_runtime_by_sample": str(plots_dir / "crossmodal_runtime_by_sample.png"),
+            "equivalence_crossmodal_max_output_diff_distribution": str(
+                plots_dir / "equivalence_crossmodal_max_output_diff_distribution.png"
+            ),
+            "equivalence_crossmodal_original_vs_migrated_runtime": str(
+                plots_dir / "equivalence_crossmodal_original_vs_migrated_runtime.png"
+            ),
+            "equivalence_crossmodal_runtime_by_sample": str(
+                plots_dir / "equivalence_crossmodal_runtime_by_sample.png"
+            ),
         }
     )
-    return outputs
-
-
-def generic_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
-    groups = group_summary(reports, "case")
-    context = experiment_context(reports)
-    outputs = write_coverage_outputs(
-        csv_dir,
-        plots_dir,
-        "benchmark",
-        f"Benchmark summary by case\n{context}",
-        groups,
-        "Benchmark case",
-    )
-    write_histogram(
-        plots_dir / "benchmark_max_output_diff_distribution.png",
-        [benchmark_max_diff(report) for report in reports],
-        "Max |original output - migrated output|",
-        f"Benchmark output-difference distribution\n{context}",
-        tolerance=tolerance_value(reports),
-    )
-    outputs["benchmark_max_output_diff_distribution"] = str(plots_dir / "benchmark_max_output_diff_distribution.png")
     return outputs
 
 
@@ -990,51 +735,9 @@ def write_benchmark_plots(
         outputs = models_plots(csv_dir, plots_dir, reports)
     elif mode == "strategies":
         outputs = strategies_plots(csv_dir, plots_dir, reports)
-    elif mode == "crossmodal":
-        outputs = crossmodal_plots(csv_dir, plots_dir, reports)
     else:
-        outputs = generic_plots(csv_dir, plots_dir, reports)
+        outputs = crossmodal_plots(csv_dir, plots_dir, reports)
     outputs["plot_mode"] = mode
     return outputs
 
 
-def write_benchmark_summary(output_dir: Path, reports: list[dict], plot_mode: str | None = None) -> dict:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    csv_dir = output_dir / CSV_DIRNAME
-    csv_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = csv_dir / "summary.csv"
-    tmp_summary_path = summary_path.with_suffix(f"{summary_path.suffix}.tmp")
-
-    with tmp_summary_path.open("w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=BENCHMARK_SUMMARY_FIELDS)
-        writer.writeheader()
-        for report in reports:
-            row = {field: report.get(field, "") for field in SUMMARY_FIELDS}
-            row["result_csv"] = report["result_paths"]["csv"]
-            writer.writerow(row)
-    tmp_summary_path.replace(summary_path)
-
-    result_paths = {"summary_csv": str(summary_path)}
-    if plot_mode is not None:
-        result_paths.update(write_benchmark_plots(output_dir, reports, plot_mode))
-    return result_paths
-
-
-def write_original_summary(output_dir: Path, reports: list[dict]) -> dict:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = output_dir / "original_pipeline.csv"
-    tmp_summary_path = summary_path.with_suffix(f"{summary_path.suffix}.tmp")
-    fieldnames = (
-        "case", "input_path", "model_preset", "model_name", "text", "text_full", "text_source", "comparison_type",
-        "n_players", "n_players_image", "n_players_text", "num_coalitions", "batch_size",
-        "random_state", "model_load_runtime_s", "original_game_build_runtime_s",
-        "original_anchor_runtime_s", "original_pipeline_runtime_s", "total_runtime_s",
-        "empty_coalition_output", "full_coalition_output", "original_pipeline_outputs",
-    )
-    with tmp_summary_path.open("w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        for report in reports:
-            writer.writerow({field: report.get(field, "") for field in fieldnames})
-    tmp_summary_path.replace(summary_path)
-    return {"original_pipeline_csv": str(summary_path)}

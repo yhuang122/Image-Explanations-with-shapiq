@@ -1,8 +1,8 @@
 {
-  "name": "pipeline_strict_mscoco100_clip_b32",
+  "name": "equivalence_models_mscoco100",
   "defaults": {
     "num_coalitions": 1000,
-    "batch_size": 32,
+    "batch_size": 64,
     "tolerance": 0.0001,
     "cuda": true,
     "use_amp": false
@@ -15,7 +15,10 @@
     "data/input/wds_mscoco_captions_test_100"
   ],
   "models": [
-    "clip-vit-b-32"
+    "clip-vit-b-32",
+    "clip-vit-b-16",
+    "siglip-base-p16-224",
+    "siglip2-base-p32-256"
   ],
   "strategies": [
     {

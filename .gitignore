@@ -193,4 +193,6 @@ cython_debug/
 .cursorindexingignore
 
 # Validation benchmark CSV outputs
-experiments/validation/results/**/csv/
+experiments/validation/equivalence/results/**/csv/
+experiments/validation/quality/results/**/csv/
+experiments/validation/quality/results/**/interaction_values/

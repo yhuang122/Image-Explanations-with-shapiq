@@ -1,4 +1,4 @@
-"""Benchmark original VLM games against migrated ImputerFactory games."""
+"""Pipeline equivalence benchmark for original and migrated VLM games."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run original-vs-migrated VLM Game benchmarks.")
+    parser = argparse.ArgumentParser(description="Run pipeline equivalence and coverage benchmarks.")
     parser.add_argument(
         "--config",
         help=(
@@ -258,6 +258,36 @@ def is_strict_equivalence_run(case: dict, coalition_comparison_available: bool) 
     )
 
 
+def comparison_scope(case: dict, coalition_comparison_available: bool) -> dict:
+    candidate_name = (
+        f"{MIGRATED_PIPELINE}:"
+        f"{case['segmenter_config'].strategy}/{case['masker_config'].strategy}"
+    )
+    if is_strict_equivalence_run(case, coalition_comparison_available):
+        return {
+            "comparison_scope": "strict_equivalence",
+            "reference_name": ORIGINAL_PIPELINE,
+            "candidate_name": candidate_name,
+            "equivalence_expected": True,
+            "metric_family": "output_equivalence",
+        }
+    if coalition_comparison_available:
+        return {
+            "comparison_scope": "baseline_deviation",
+            "reference_name": ORIGINAL_PIPELINE,
+            "candidate_name": candidate_name,
+            "equivalence_expected": False,
+            "metric_family": "baseline_deviation",
+        }
+    return {
+        "comparison_scope": "anchor_compatibility",
+        "reference_name": f"{ORIGINAL_PIPELINE}:empty_full_anchors",
+        "candidate_name": candidate_name,
+        "equivalence_expected": False,
+        "metric_family": "anchor_consistency",
+    }
+
+
 def summarize_coalition_differences(
     old_pipeline_values: np.ndarray | None,
     new_pipeline_values: np.ndarray,
@@ -309,6 +339,7 @@ def build_benchmark_report(
         "migrated_pipeline": MIGRATED_PIPELINE,
         "comparison_type": case["comparison_type"],
         "comparison_mode": comparison_mode,
+        **comparison_scope(case, coalition_comparison_available),
         "input_path": str(case["input_path"]),
         "model_preset": case["model_preset"],
         "model_name": case["model_name"],
@@ -624,8 +655,8 @@ def main() -> int:
                 {
                     "benchmark_runs": len(reports),
                     "resumed_runs": sum(1 for report in reports if report.get("_resumed")),
+                    "failed_strict_runs": sum(1 for report in reports if is_failed_strict_report(report)),
                     "result_paths": result_paths,
-                    "reports": reports,
                 },
                 indent=2,
             )

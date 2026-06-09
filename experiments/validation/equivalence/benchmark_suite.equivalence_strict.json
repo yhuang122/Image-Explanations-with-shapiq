@@ -1,14 +1,15 @@
 {
-  "name": "pipeline_crossmodal_mscoco100_clip_b32",
+  "name": "equivalence_strict_mscoco100_clip_b32",
   "defaults": {
     "num_coalitions": 1000,
-    "batch_size": 64,
+    "batch_size": 32,
     "tolerance": 0.0001,
     "cuda": true,
     "use_amp": false
   },
   "cases": [
-    "pointing_game_crossmodal"
+    "faithfulness",
+    "insertion_deletion"
   ],
   "inputs": [
     "data/input/wds_mscoco_captions_test_100"

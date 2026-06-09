@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RESULTS_DIR = PROJECT_ROOT / "experiments" / "validation" / "results"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+RESULTS_DIR = PROJECT_ROOT / "experiments" / "validation" / "equivalence" / "results"
 DEFAULT_INPUT_DIR = PROJECT_ROOT / "data" / "input" / "wds_mscoco_captions_test_100"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -85,6 +85,10 @@ RUN_CONTEXT_FIELDS = (
     "model_type", "text", "text_full", "text_source", "comparison_type", "comparison_mode",
     "device", "use_amp",
 )
+COMPARISON_SCOPE_FIELDS = (
+    "comparison_scope", "reference_name", "candidate_name",
+    "equivalence_expected", "metric_family",
+)
 STRATEGY_FIELDS = (
     "segmenter_strategy", "segmenter_params", "masker_strategy", "masker_params",
 )
@@ -120,6 +124,7 @@ DIFF_FIELDS = (
 )
 SUMMARY_FIELDS = (
     *RUN_CONTEXT_FIELDS,
+    *COMPARISON_SCOPE_FIELDS,
     *STRATEGY_FIELDS,
     *LAYOUT_FIELDS,
     *PARAMETER_FIELDS,

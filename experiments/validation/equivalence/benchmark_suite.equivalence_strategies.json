@@ -1,5 +1,5 @@
 {
-  "name": "pipeline_strategies_mscoco100_clip_b32",
+  "name": "equivalence_strategies_mscoco100_clip_b32",
   "defaults": {
     "num_coalitions": 1000,
     "batch_size": 64,

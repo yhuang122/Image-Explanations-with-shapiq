@@ -1,0 +1,68 @@
+{
+  "name": "aid_clip_siglip_mscoco100",
+  "inputs": [
+    "data/input/wds_mscoco_captions_test_100"
+  ],
+  "defaults": {
+    "batch_size": 64,
+    "curve_points": 101,
+    "cuda": true,
+    "use_amp": false,
+    "text_column": "first_caption"
+  },
+  "models": [
+    "clip-vit-b-32",
+    "siglip-base-p16-224"
+  ],
+  "strategies": [
+    {
+      "name": "patch_crossmodal_mean",
+      "segmenter": "patch",
+      "masker": "crossmodal_mean"
+    },
+    {
+      "name": "slic_crossmodal_mean",
+      "segmenter": "slic",
+      "masker": "crossmodal_mean",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      }
+    }
+  ],
+  "methods": [
+    {
+      "name": "kernelshap_shapley_order1",
+      "mode": "shapley",
+      "order": 1,
+      "explainer_name": "fixlip",
+      "approximation_type": "original",
+      "budget": 4096
+    },
+    {
+      "name": "proxyshap_banzhaf_p03_order2",
+      "mode": "banzhaf/0.3",
+      "order": 2,
+      "explainer_name": "fixlip",
+      "approximation_type": "proxyshap",
+      "budget": 4096
+    },
+    {
+      "name": "proxyshap_banzhaf_p05_order2",
+      "mode": "banzhaf/0.5",
+      "order": 2,
+      "explainer_name": "fixlip",
+      "approximation_type": "proxyshap",
+      "budget": 4096
+    },
+    {
+      "name": "proxyshap_banzhaf_p07_order2",
+      "mode": "banzhaf/0.7",
+      "order": 2,
+      "explainer_name": "fixlip",
+      "approximation_type": "proxyshap",
+      "budget": 4096
+    }
+  ]
+}
