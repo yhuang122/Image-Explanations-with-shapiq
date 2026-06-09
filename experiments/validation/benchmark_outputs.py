@@ -21,7 +21,9 @@ from benchmark_schema import (
 
 
 PLOTS_DIRNAME = "plots"
-RUNS_DIRNAME = "runs"
+CSV_DIRNAME = "csv"
+RUNS_DIRNAME = CSV_DIRNAME
+PLOT_MODES = ("strict", "models", "strategies", "crossmodal")
 
 
 def active_params(config) -> dict:
@@ -248,16 +250,22 @@ def write_top_bar_plot(
     import matplotlib.pyplot as plt
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    upper_candidates = list(values)
+    upper_candidates = [abs(value) for value in values]
     if tolerance is not None:
         upper_candidates.append(float(tolerance))
     upper_limit = max(upper_candidates or [1.0]) * 1.2
     if upper_limit == 0:
         upper_limit = 1.0
     lower_limit = -max(upper_limit * 0.08, 1e-6)
+    zero_marker = max(upper_limit * 0.025, 1e-8)
+    plot_bottoms = [-zero_marker if value == 0 else 0 for value in values]
+    plot_heights = [zero_marker if value == 0 else value for value in values]
 
     fig, ax = plt.subplots(figsize=(max(8, len(labels) * 0.9), 5.0))
-    ax.bar(labels, values)
+    bars = ax.bar(labels, plot_heights, bottom=plot_bottoms)
+    for bar, value in zip(bars, values):
+        if value == 0:
+            bar.set_alpha(0.45)
     if tolerance is not None:
         ax.axhline(float(tolerance), color="red", linestyle="--", linewidth=1, label="tolerance")
         ax.legend()
@@ -265,6 +273,9 @@ def write_top_bar_plot(
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.tick_params(axis="x", labelrotation=45)
+    for index, value in enumerate(values):
+        label = "0.0" if value == 0 else f"{value:.3g}"
+        ax.text(index, max(value, 0) + upper_limit * 0.025, label, ha="center", va="bottom", fontsize=8)
     fig.tight_layout()
     fig.savefig(path, dpi=160)
     plt.close(fig)
@@ -275,7 +286,12 @@ def write_histogram(path: Path, values: list[float], xlabel: str, title: str, to
 
     path.parent.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.hist(values, bins=min(40, max(10, int(np.sqrt(len(values) or 1)))))
+    if tolerance is not None and values and min(values) >= 0 and max(values) <= float(tolerance):
+        bins = np.linspace(0, float(tolerance), 21)
+        ax.hist(values, bins=bins)
+        ax.set_xlim(0, float(tolerance) * 1.2)
+    else:
+        ax.hist(values, bins=min(40, max(10, int(np.sqrt(len(values) or 1)))))
     if tolerance is not None:
         ax.axvline(float(tolerance), color="red", linestyle="--", linewidth=1, label="tolerance")
         ax.legend()
@@ -346,14 +362,647 @@ def report_top_label(report: dict) -> str:
     )
 
 
-def write_benchmark_summary(output_dir: Path, reports: list[dict]) -> dict:
+def benchmark_max_diff(report: dict) -> float:
+    for field in (
+        "benchmark_metric_max_output_diff",
+        "coalition_max_abs_output_diff",
+        "empty_full_anchor_max_abs_output_diff",
+    ):
+        value = parse_report_float(report, field)
+        if value is not None:
+            return value
+    return 0.0
+
+
+def benchmark_mean_diff(report: dict) -> float:
+    for field in (
+        "benchmark_metric_mean_output_diff",
+        "coalition_mean_abs_output_diff",
+        "empty_full_anchor_mean_abs_output_diff",
+    ):
+        value = parse_report_float(report, field)
+        if value is not None:
+            return value
+    return 0.0
+
+
+def passed(report: dict) -> bool:
+    return str(report.get("passed", "")).strip().lower() == "true"
+
+
+def true_field(report: dict, field: str) -> bool:
+    return str(report.get(field, "")).strip().lower() == "true"
+
+
+def display_label(value: str, max_length: int = 34) -> str:
+    value = str(value or "unknown")
+    return value if len(value) <= max_length else f"{value[: max_length - 3]}..."
+
+
+def ordered_values(reports: list[dict], field: str) -> list[str]:
+    values = []
+    for report in reports:
+        value = str(report.get(field) or "unknown")
+        if value not in values:
+            values.append(value)
+    return values
+
+
+def experiment_context(reports: list[dict]) -> str:
+    if not reports:
+        return ""
+    report = reports[0]
+    input_paths = [Path(str(row.get("input_path", ""))) for row in reports if row.get("input_path")]
+    dataset = input_paths[0].parent.name if input_paths else "dataset"
+    dataset = "MS COCO 100" if "mscoco" in dataset.lower() and "100" in dataset else dataset
+    tolerance = parse_report_float(report, "tolerance")
+    tolerance_text = f"{tolerance:.0e}" if tolerance is not None else "n/a"
+    return (
+        f"{dataset} | {len(reports)} runs | "
+        f"coalitions={report.get('num_coalitions', 'n/a')} | "
+        f"batch={report.get('batch_size', 'n/a')} | tolerance={tolerance_text}"
+    )
+
+
+def group_summary(reports: list[dict], group_field: str) -> list[dict]:
+    groups = []
+    for group in ordered_values(reports, group_field):
+        group_reports = [report for report in reports if str(report.get(group_field) or "unknown") == group]
+        original_runtime = [parse_report_float(report, "original_pipeline_runtime_s") for report in group_reports]
+        migrated_runtime = [parse_report_float(report, "migrated_pipeline_runtime_s") for report in group_reports]
+        original_runtime = [value for value in original_runtime if value is not None]
+        migrated_runtime = [value for value in migrated_runtime if value is not None]
+        deltas = [
+            migrated - original
+            for original, migrated in zip(original_runtime, migrated_runtime)
+        ]
+        ratios = [
+            migrated / original
+            for original, migrated in zip(original_runtime, migrated_runtime)
+            if original
+        ]
+        max_diffs = [benchmark_max_diff(report) for report in group_reports]
+        mean_diffs = [benchmark_mean_diff(report) for report in group_reports]
+        groups.append(
+            {
+                "group": group,
+                "runs": len(group_reports),
+                "passed": sum(passed(report) for report in group_reports),
+                "pass_rate": sum(passed(report) for report in group_reports) / len(group_reports),
+                "max_diff": max(max_diffs or [0.0]),
+                "mean_diff": float(np.mean(mean_diffs or [0.0])),
+                "original_runtime": float(np.mean(original_runtime)) if original_runtime else 0.0,
+                "migrated_runtime": float(np.mean(migrated_runtime)) if migrated_runtime else 0.0,
+                "runtime_delta": float(np.mean(deltas)) if deltas else 0.0,
+                "runtime_ratio": float(np.mean(ratios)) if ratios else 0.0,
+            }
+        )
+    return groups
+
+
+def write_table_csv(path: Path, headers: list[str], rows: list[list]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow(headers)
+        writer.writerows(rows)
+
+
+def write_table_image(
+    path: Path,
+    title: str,
+    headers: list[str],
+    rows: list[list],
+    col_widths: list[float] | None = None,
+) -> None:
+    if not rows:
+        return
+    import matplotlib.pyplot as plt
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure_height = max(3.0, 0.45 * len(rows) + 1.4)
+    fig, ax = plt.subplots(figsize=(14, figure_height))
+    ax.axis("off")
+    table = ax.table(
+        cellText=rows,
+        colLabels=headers,
+        loc="center",
+        cellLoc="left",
+        colLoc="left",
+        colWidths=col_widths,
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(8.5)
+    table.scale(1, 1.35)
+    for (row_index, _), cell in table.get_celld().items():
+        cell.set_edgecolor("#d0d7de")
+        if row_index == 0:
+            cell.set_text_props(weight="bold", color="white")
+            cell.set_facecolor("#2f5597")
+        elif row_index % 2 == 0:
+            cell.set_facecolor("#eef3f8")
+    ax.set_title(title, fontsize=14, pad=12)
+    fig.tight_layout()
+    fig.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def write_pass_rate_plot(path: Path, groups: list[dict], title: str) -> None:
+    import matplotlib.pyplot as plt
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    labels = [display_label(group["group"]) for group in groups]
+    values = [group["pass_rate"] * 100.0 for group in groups]
+    fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.3), 4.6))
+    ax.bar(labels, values, color="#2ca02c")
+    ax.set_ylim(0, 112)
+    ax.set_ylabel("pass rate (%)")
+    ax.set_title(title)
+    ax.tick_params(axis="x", labelrotation=35)
+    for index, value in enumerate(values):
+        ax.text(index, min(value + 2, 106), f"{value:.0f}%", ha="center", va="bottom")
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def write_group_runtime_plot(path: Path, groups: list[dict], title: str) -> None:
+    import matplotlib.pyplot as plt
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    labels = [display_label(group["group"]) for group in groups]
+    original = [group["original_runtime"] for group in groups]
+    migrated = [group["migrated_runtime"] for group in groups]
+    x = np.arange(len(labels))
+    width = 0.36
+
+    fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.4), 5.0))
+    ax.bar(x - width / 2, original, width, label="Original HF baseline")
+    ax.bar(x + width / 2, migrated, width, label="Migrated pipeline")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=35, ha="right")
+    ax.set_ylabel("Mean runtime per run (s)")
+    ax.set_title(title)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def write_group_metric_plot(path: Path, groups: list[dict], metric: str, ylabel: str, title: str, tolerance=None) -> None:
+    values = [float(group[metric]) for group in groups]
+    write_top_bar_plot(
+        path,
+        [display_label(group["group"]) for group in groups],
+        values,
+        ylabel,
+        title,
+        tolerance=tolerance,
+    )
+
+
+def write_single_runtime_plot(path: Path, groups: list[dict], title: str) -> None:
+    values = [float(group["migrated_runtime"]) for group in groups]
+    write_top_bar_plot(
+        path,
+        [display_label(group["group"]) for group in groups],
+        values,
+        "Migrated pipeline mean runtime per run (s)",
+        title,
+    )
+
+
+def write_runtime_scatter(path: Path, reports: list[dict], title: str) -> None:
+    import matplotlib.pyplot as plt
+
+    points = [
+        (
+            parse_report_float(report, "original_pipeline_runtime_s"),
+            parse_report_float(report, "migrated_pipeline_runtime_s"),
+        )
+        for report in reports
+    ]
+    points = [(original, migrated) for original, migrated in points if original is not None and migrated is not None]
+    if not points:
+        return
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    original = [point[0] for point in points]
+    migrated = [point[1] for point in points]
+    lower = min(original + migrated) * 0.95
+    upper = max(original + migrated) * 1.05
+
+    fig, ax = plt.subplots(figsize=(6.4, 6.0))
+    ax.scatter(original, migrated, alpha=0.75)
+    ax.plot([lower, upper], [lower, upper], color="red", linestyle="--", linewidth=1, label="equal runtime")
+    ax.set_xlim(lower, upper)
+    ax.set_ylim(lower, upper)
+    ax.set_xlabel("Original HF baseline runtime per run (s)")
+    ax.set_ylabel("Migrated pipeline runtime per run (s)")
+    ax.set_title(title)
+    ax.legend()
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def write_sample_runtime_line(path: Path, reports: list[dict], title: str) -> None:
+    import matplotlib.pyplot as plt
+
+    rows = []
+    for report in sorted(reports, key=lambda item: str(item.get("input_path", ""))):
+        runtime = parse_report_float(report, "migrated_pipeline_runtime_s")
+        if runtime is not None:
+            rows.append(runtime)
+    if not rows:
+        return
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    x = np.arange(len(rows))
+    mean_runtime = float(np.mean(rows))
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    ax.plot(x, rows, marker="o", linewidth=1.8)
+    ax.axhline(mean_runtime, color="tab:red", linestyle="--", linewidth=1.2, label=f"mean {mean_runtime:.2f}s")
+    ax.set_xlabel("Image-text sample index")
+    ax.set_ylabel("Migrated pipeline runtime per run (s)")
+    ax.set_title(title)
+    ax.grid(axis="y", alpha=0.25)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def write_paired_sample_runtime_line(path: Path, reports: list[dict], title: str) -> None:
+    import matplotlib.pyplot as plt
+
+    rows = []
+    for report in sorted(reports, key=lambda item: str(item.get("input_path", ""))):
+        original = parse_report_float(report, "original_pipeline_runtime_s")
+        migrated = parse_report_float(report, "migrated_pipeline_runtime_s")
+        if original is not None and migrated is not None:
+            rows.append((original, migrated))
+    if not rows:
+        return
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    x = np.arange(len(rows))
+    original = [row[0] for row in rows]
+    migrated = [row[1] for row in rows]
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    ax.plot(x, original, marker="o", linewidth=1.6, label="Original HF baseline")
+    ax.plot(x, migrated, marker="o", linewidth=1.6, label="Migrated pipeline")
+    ax.set_xlabel("Image-text sample index")
+    ax.set_ylabel("Runtime per run (s)")
+    ax.set_title(title)
+    ax.grid(axis="y", alpha=0.25)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def tolerance_value(reports: list[dict]):
+    values = [parse_report_float(report, "tolerance") for report in reports]
+    values = [value for value in values if value is not None]
+    return max(values) if values else None
+
+
+def coverage_table(groups: list[dict], group_header: str) -> tuple[list[str], list[list]]:
+    headers = [
+        group_header,
+        "Runs",
+        "Passed",
+        "Pass rate",
+        "Max |output diff|",
+        "Original mean (s)",
+        "Migrated mean (s)",
+        "Migrated / Original",
+    ]
+    rows = [
+        [
+            display_label(group["group"], 48),
+            group["runs"],
+            group["passed"],
+            f"{group['pass_rate'] * 100:.1f}%",
+            f"{group['max_diff']:.3g}",
+            f"{group['original_runtime']:.2f}s",
+            f"{group['migrated_runtime']:.2f}s",
+            f"{group['runtime_ratio']:.2f}x",
+        ]
+        for group in groups
+    ]
+    return headers, rows
+
+
+def write_coverage_outputs(
+    csv_dir: Path,
+    plots_dir: Path,
+    prefix: str,
+    title: str,
+    groups: list[dict],
+    group_header: str,
+) -> dict:
+    headers, rows = coverage_table(groups, group_header)
+    csv_path = csv_dir / f"{prefix}_coverage_table.csv"
+    image_path = plots_dir / f"{prefix}_coverage_table.png"
+    write_table_csv(csv_path, headers, rows)
+    write_table_image(
+        image_path,
+        title,
+        headers,
+        rows,
+        col_widths=[0.22, 0.08, 0.08, 0.10, 0.14, 0.13, 0.13, 0.12],
+    )
+    return {
+        f"{prefix}_coverage_csv": str(csv_path),
+        f"{prefix}_coverage_table": str(image_path),
+    }
+
+
+def strategy_summary(reports: list[dict]) -> list[dict]:
+    groups = []
+    for strategy in ordered_values(reports, "strategy_name"):
+        strategy_reports = [report for report in reports if str(report.get("strategy_name") or "unknown") == strategy]
+        comparable_reports = [
+            report for report in strategy_reports if true_field(report, "coalition_comparison_available")
+        ]
+        migrated_runtime = [
+            parse_report_float(report, "migrated_pipeline_runtime_s") for report in strategy_reports
+        ]
+        migrated_runtime = [value for value in migrated_runtime if value is not None]
+        groups.append(
+            {
+                "group": strategy,
+                "runs": len(strategy_reports),
+                "completed": len(strategy_reports),
+                "strict_equivalent": sum(true_field(report, "strict_equivalence") for report in strategy_reports),
+                "baseline_comparable": len(comparable_reports),
+                "baseline_deviation": (
+                    max(benchmark_max_diff(report) for report in comparable_reports)
+                    if comparable_reports
+                    else None
+                ),
+                "migrated_runtime": float(np.mean(migrated_runtime)) if migrated_runtime else 0.0,
+            }
+        )
+    return groups
+
+
+def write_strategy_table(csv_dir: Path, plots_dir: Path, groups: list[dict], title: str) -> dict:
+    headers = [
+        "Strategy",
+        "Runs",
+        "Completed",
+        "Strict-equivalent runs",
+        "Baseline-comparable runs",
+        "Max baseline deviation",
+        "Migrated runtime (s)",
+    ]
+    rows = [
+        [
+            display_label(group["group"], 48),
+            group["runs"],
+            group["completed"],
+            group["strict_equivalent"],
+            group["baseline_comparable"],
+            "N/A" if group["baseline_deviation"] is None else f"{group['baseline_deviation']:.3g}",
+            f"{group['migrated_runtime']:.2f}s",
+        ]
+        for group in groups
+    ]
+    csv_path = csv_dir / "strategies_coverage_table.csv"
+    image_path = plots_dir / "strategies_coverage_table.png"
+    write_table_csv(csv_path, headers, rows)
+    write_table_image(
+        image_path,
+        title,
+        headers,
+        rows,
+        col_widths=[0.22, 0.08, 0.10, 0.15, 0.17, 0.14, 0.14],
+    )
+    return {
+        "strategies_coverage_csv": str(csv_path),
+        "strategies_coverage_table": str(image_path),
+    }
+
+
+def write_strategy_baseline_deviation_plot(path: Path, groups: list[dict], title: str) -> None:
+    comparable_groups = [group for group in groups if group["baseline_deviation"] is not None]
+    if not comparable_groups:
+        return
+    write_top_bar_plot(
+        path,
+        [display_label(group["group"]) for group in comparable_groups],
+        [float(group["baseline_deviation"]) for group in comparable_groups],
+        "Max |baseline output - strategy output|",
+        title,
+    )
+
+
+def strict_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
+    outputs = {}
+    groups = group_summary(reports, "case")
+    context = experiment_context(reports)
+    outputs.update(
+        write_coverage_outputs(
+            csv_dir,
+            plots_dir,
+            "strict",
+            f"Strict equivalence summary by case\n{context}",
+            groups,
+            "Validation case",
+        )
+    )
+    write_histogram(
+        plots_dir / "strict_max_output_diff_distribution.png",
+        [benchmark_max_diff(report) for report in reports],
+        "Max |original output - migrated output|",
+        f"Strict equivalence: output-difference distribution\n{context}",
+        tolerance=tolerance_value(reports),
+    )
+    write_group_runtime_plot(
+        plots_dir / "strict_runtime_by_case.png",
+        groups,
+        f"Strict equivalence: runtime comparison by case\n{context}",
+    )
+    outputs.update(
+        {
+            "strict_max_output_diff_distribution": str(plots_dir / "strict_max_output_diff_distribution.png"),
+            "strict_runtime_by_case": str(plots_dir / "strict_runtime_by_case.png"),
+        }
+    )
+    return outputs
+
+
+def models_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
+    outputs = {}
+    groups = group_summary(reports, "model_preset")
+    context = experiment_context(reports)
+    outputs.update(
+        write_coverage_outputs(
+            csv_dir,
+            plots_dir,
+            "models",
+            f"Model coverage summary\n{context}",
+            groups,
+            "Vision-language model",
+        )
+    )
+    write_pass_rate_plot(plots_dir / "models_pass_rate.png", groups, f"Pipeline pass rate by model\n{context}")
+    write_group_runtime_plot(
+        plots_dir / "models_runtime_by_model.png",
+        groups,
+        f"Runtime comparison by model\n{context}",
+    )
+    write_group_metric_plot(
+        plots_dir / "models_max_output_diff_by_model.png",
+        groups,
+        "max_diff",
+        "Max |original output - migrated output|",
+        f"Worst output difference by model\n{context}",
+        tolerance=tolerance_value(reports),
+    )
+    outputs.update(
+        {
+            "models_pass_rate": str(plots_dir / "models_pass_rate.png"),
+            "models_runtime_by_model": str(plots_dir / "models_runtime_by_model.png"),
+            "models_max_output_diff_by_model": str(plots_dir / "models_max_output_diff_by_model.png"),
+        }
+    )
+    return outputs
+
+
+def strategies_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
+    outputs = {}
+    groups = strategy_summary(reports)
+    context = experiment_context(reports)
+    outputs.update(write_strategy_table(csv_dir, plots_dir, groups, f"Strategy coverage summary\n{context}"))
+    write_single_runtime_plot(
+        plots_dir / "strategies_migrated_runtime_by_strategy.png",
+        groups,
+        f"Migrated pipeline runtime by strategy\n{context}",
+    )
+    write_strategy_baseline_deviation_plot(
+        plots_dir / "strategies_baseline_deviation_by_strategy.png",
+        groups,
+        f"Baseline output deviation for comparable strategies\n{context}",
+    )
+    rows, cols, matrix = group_mean(reports, "case", "strategy_name", "migrated_pipeline_runtime_s")
+    write_heatmap(
+        plots_dir / "strategies_runtime_case_heatmap.png",
+        rows,
+        cols,
+        matrix,
+        f"Mean runtime by case and strategy\n{context}",
+        "mean runtime (s)",
+    )
+    outputs.update(
+        {
+            "strategies_migrated_runtime_by_strategy": str(plots_dir / "strategies_migrated_runtime_by_strategy.png"),
+            "strategies_baseline_deviation_by_strategy": str(plots_dir / "strategies_baseline_deviation_by_strategy.png"),
+            "strategies_runtime_case_heatmap": str(plots_dir / "strategies_runtime_case_heatmap.png"),
+        }
+    )
+    return outputs
+
+
+def crossmodal_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
+    outputs = {}
+    groups = group_summary(reports, "case")
+    context = experiment_context(reports)
+    outputs.update(
+        write_coverage_outputs(
+            csv_dir,
+            plots_dir,
+            "crossmodal",
+            f"Crossmodal equivalence summary\n{context}",
+            groups,
+            "Crossmodal validation case",
+        )
+    )
+    write_histogram(
+        plots_dir / "crossmodal_max_output_diff_distribution.png",
+        [benchmark_max_diff(report) for report in reports],
+        "Max |original output - migrated output|",
+        f"Crossmodal equivalence: output-difference distribution\n{context}",
+        tolerance=tolerance_value(reports),
+    )
+    write_runtime_scatter(
+        plots_dir / "crossmodal_original_vs_migrated_runtime.png",
+        reports,
+        f"Crossmodal runtime scatter: original baseline vs migrated pipeline\n{context}",
+    )
+    write_paired_sample_runtime_line(
+        plots_dir / "crossmodal_runtime_by_sample.png",
+        reports,
+        f"Crossmodal runtime by image-text sample\n{context}",
+    )
+    outputs.update(
+        {
+            "crossmodal_max_output_diff_distribution": str(plots_dir / "crossmodal_max_output_diff_distribution.png"),
+            "crossmodal_original_vs_migrated_runtime": str(plots_dir / "crossmodal_original_vs_migrated_runtime.png"),
+            "crossmodal_runtime_by_sample": str(plots_dir / "crossmodal_runtime_by_sample.png"),
+        }
+    )
+    return outputs
+
+
+def generic_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
+    groups = group_summary(reports, "case")
+    context = experiment_context(reports)
+    outputs = write_coverage_outputs(
+        csv_dir,
+        plots_dir,
+        "benchmark",
+        f"Benchmark summary by case\n{context}",
+        groups,
+        "Benchmark case",
+    )
+    write_histogram(
+        plots_dir / "benchmark_max_output_diff_distribution.png",
+        [benchmark_max_diff(report) for report in reports],
+        "Max |original output - migrated output|",
+        f"Benchmark output-difference distribution\n{context}",
+        tolerance=tolerance_value(reports),
+    )
+    outputs["benchmark_max_output_diff_distribution"] = str(plots_dir / "benchmark_max_output_diff_distribution.png")
+    return outputs
+
+
+def write_benchmark_plots(
+    output_dir: Path,
+    reports: list[dict],
+    mode: str,
+    plots_dir: Path | None = None,
+    csv_dir: Path | None = None,
+) -> dict:
+    if mode not in PLOT_MODES:
+        raise ValueError(f"mode must be one of {', '.join(PLOT_MODES)}")
+    plots_dir = plots_dir or output_dir / PLOTS_DIRNAME
+    csv_dir = csv_dir or output_dir / CSV_DIRNAME
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    csv_dir.mkdir(parents=True, exist_ok=True)
+    if mode == "strict":
+        outputs = strict_plots(csv_dir, plots_dir, reports)
+    elif mode == "models":
+        outputs = models_plots(csv_dir, plots_dir, reports)
+    elif mode == "strategies":
+        outputs = strategies_plots(csv_dir, plots_dir, reports)
+    elif mode == "crossmodal":
+        outputs = crossmodal_plots(csv_dir, plots_dir, reports)
+    else:
+        outputs = generic_plots(csv_dir, plots_dir, reports)
+    outputs["plot_mode"] = mode
+    return outputs
+
+
+def write_benchmark_summary(output_dir: Path, reports: list[dict], plot_mode: str | None = None) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = output_dir / "summary.csv"
-    plots_dir = output_dir / PLOTS_DIRNAME
-    histogram_path = plots_dir / "max_output_diff_distribution.png"
-    top_diff_path = plots_dir / "top_max_output_diff.png"
-    diff_heatmap_path = plots_dir / "mean_max_output_diff_heatmap.png"
-    runtime_heatmap_path = plots_dir / "mean_runtime_heatmap.png"
+    csv_dir = output_dir / CSV_DIRNAME
+    csv_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = csv_dir / "summary.csv"
     tmp_summary_path = summary_path.with_suffix(f"{summary_path.suffix}.tmp")
 
     with tmp_summary_path.open("w", newline="", encoding="utf-8") as file:
@@ -365,50 +1014,10 @@ def write_benchmark_summary(output_dir: Path, reports: list[dict]) -> dict:
             writer.writerow(row)
     tmp_summary_path.replace(summary_path)
 
-    diff_values = [max_output_diff_metric(report) for report in reports]
-    write_histogram(
-        histogram_path,
-        diff_values,
-        "max output diff: original vs migrated",
-        "Max output diff distribution",
-        tolerance=max(float(report["tolerance"]) for report in reports),
-    )
-
-    top_reports = sorted(reports, key=max_output_diff_metric, reverse=True)[: min(20, len(reports))]
-    write_top_bar_plot(
-        top_diff_path,
-        [report_top_label(report) for report in top_reports],
-        [max_output_diff_metric(report) for report in top_reports],
-        "max output diff: original vs migrated",
-        "Top max output diff runs",
-        tolerance=max(float(report["tolerance"]) for report in reports),
-    )
-
-    rows, cols, matrix = group_mean(reports, "case", "model_preset", "benchmark_metric_max_output_diff")
-    write_heatmap(
-        diff_heatmap_path,
-        rows,
-        cols,
-        matrix,
-        "Mean max output diff by case and model",
-        "mean max output diff",
-    )
-    rows, cols, matrix = group_mean(reports, "case", "strategy_name", "migrated_pipeline_runtime_s")
-    write_heatmap(
-        runtime_heatmap_path,
-        rows,
-        cols,
-        matrix,
-        "Mean migrated runtime by case and strategy",
-        "mean runtime (s)",
-    )
-    return {
-        "summary_csv": str(summary_path),
-        "max_output_diff_distribution_plot": str(histogram_path),
-        "top_max_output_diff_plot": str(top_diff_path),
-        "mean_max_output_diff_heatmap": str(diff_heatmap_path),
-        "mean_runtime_heatmap": str(runtime_heatmap_path),
-    }
+    result_paths = {"summary_csv": str(summary_path)}
+    if plot_mode is not None:
+        result_paths.update(write_benchmark_plots(output_dir, reports, plot_mode))
+    return result_paths
 
 
 def write_original_summary(output_dir: Path, reports: list[dict]) -> dict:

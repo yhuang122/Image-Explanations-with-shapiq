@@ -2,7 +2,7 @@
   "name": "pipeline_strategies_mscoco100_clip_b32",
   "defaults": {
     "num_coalitions": 1000,
-    "batch_size": 16,
+    "batch_size": 64,
     "tolerance": 0.0001,
     "cuda": true,
     "use_amp": false

@@ -1,53 +1,59 @@
 # Unified Benchmark Harness
 
-This benchmark validates the full image-explanation pipeline by comparing the original pipeline against the migrated `ImageImputerFactory + Game.VisionLanguageGame` pipeline.
+This folder contains the A2/A3 benchmark runner for validating migrated image-explanation games.
 
-Commands below assume they are run from the project root with the benchmark environment activated:
+The benchmark compares the original HuggingFace-based game pipeline against the migrated
+`ImageImputerFactory + Game.VisionLanguageGame` pipeline. It records run-level outputs,
+runtime, model metadata, strategy metadata, and equivalence metrics.
 
-```powershell
-cd D:\TTML\Image-Explanations-with-shapiq
+## Input Data
+
+Batch benchmarks use:
+
+```text
+data/input/wds_mscoco_captions_test_100
 ```
 
-## Quick Single-Image Check
+The input folder must contain `manifest.csv`. Each row must provide:
 
-Run one image with the default strategy suite:
+| Column | Use |
+|---|---|
+| `filename` | Image file path relative to the input folder. |
+| `first_caption` | Default text input used by the benchmark. |
+| `caption` | Full caption text preserved in result CSVs as `text_full`. |
+
+The benchmark uses `first_caption` as the model text input to avoid CLIP-style 77-token limits.
+The full caption is still saved for traceability.
+
+For a single image, pass both image and text explicitly:
 
 ```powershell
 python .\experiments\validation\benchmark_games.py --case insertion_deletion --input assets\dog_and_hydrant.jpg --text "dog" --num-coalitions 4 --batch-size 2 --tolerance 1e-4 --cuda
 ```
 
-Run only the strict-equivalence strategy:
+## Preset Suites
 
-```powershell
-python .\experiments\validation\benchmark_games.py --case insertion_deletion --input assets\dog_and_hydrant.jpg --text "dog" --num-coalitions 1000 --batch-size 16 --tolerance 1e-4 --cuda --segmenter-strategy patch --masker-strategy crossmodal_mean
-```
+| Preset | Plot mode | Purpose | Runs |
+|---|---|---|---:|
+| `benchmark_suite.pipeline_strict.json` | `strict` | Strict original-vs-migrated numerical equivalence for `patch/crossmodal_mean`. | 200 |
+| `benchmark_suite.pipeline_models.json` | `models` | Same pipeline over CLIP, SigLIP, and SigLIP2 model presets. | 800 |
+| `benchmark_suite.pipeline_strategies.json` | `strategies` | Migrated pipeline coverage over segmenter/masker strategies. | 800 |
+| `benchmark_suite.pipeline_crossmodal.json` | `crossmodal` | Crossmodal image-text player coverage. | 100 |
 
-## Pipeline Presets
-
-The preset JSON files use `data/input/wds_mscoco_captions_test_100`. Input directories must contain `manifest.csv`; the benchmark reads each row's `filename` and uses `first_caption` as the model text input. The full `caption` column is preserved in result CSVs as `text_full`.
-
-| Preset | Purpose | Planned runs |
-|---|---|---:|
-| `benchmark_suite.pipeline_strict.json` | Strict original-vs-migrated equivalence for the standard `patch/crossmodal_mean` setup. | 200 |
-| `benchmark_suite.pipeline_models.json` | Model coverage for base CLIP/SigLIP/SigLIP2 models. | 800 |
-| `benchmark_suite.pipeline_strategies.json` | Strategy coverage for the migrated pipeline. | 800 |
-| `benchmark_suite.pipeline_crossmodal.json` | Crossmodal value-function coverage with a smaller coalition count. | 100 |
-
-Running all four current presets completes:
+The staged full benchmark is:
 
 ```text
-200 + 800 + 800 + 100 = 1900 planned runs
+200 + 800 + 800 + 100 = 1900 runs
 ```
 
-This is staged full-pipeline validation. It is not an exhaustive Cartesian-product benchmark. A naive exhaustive run over all current cases, 100 images, 6 model presets, and 4 strategies would be:
+This is not the full Cartesian product. A full product over 8 cases, 100 images, 6 models,
+and 4 strategies would be:
 
 ```text
-8 cases * 100 images * 6 models * 4 strategies = 19200 run-level combinations
+8 * 100 * 6 * 4 = 19200 runs
 ```
 
-`pipeline_crossmodal` is kept separate because each run expands internally across image and text coalitions.
-
-## Run Presets
+## Run Benchmarks
 
 Strict equivalence:
 
@@ -77,52 +83,55 @@ python .\experiments\validation\benchmark_games.py --config .\experiments\valida
 python .\experiments\validation\benchmark_games.py --config .\experiments\validation\benchmark_suite.pipeline_crossmodal.json
 ```
 
-## Resume And Force
-
-Interrupted runs can be resumed by running the same command again. Existing valid `runs/*_comparison.csv` files are reused and skipped.
-
-Use `--force` to recompute an existing preset:
+Interrupted runs resume automatically. Existing valid `csv/*_comparison.csv` files are skipped.
+Use `--force` only when a preset should be recomputed:
 
 ```powershell
 python .\experiments\validation\benchmark_games.py --config .\experiments\validation\benchmark_suite.pipeline_strict.json --force
 ```
 
-## Main Parameters
+## Runtime Parameters
 
-- `--config`: JSON batch preset. This is the preferred path for folder-level benchmark runs.
-- `--dry-run`: print the expanded benchmark plan without loading models.
-- `--force`: recompute runs even when result CSVs already exist.
-- `--case`: migrated Python file name without `.py`.
-- `--input`: image file or manifest-backed image folder. If omitted, `data/input/wds_mscoco_captions_test_100` is used.
-- `--text`: required text input for single-image input. Batch directory inputs read `manifest.csv`.
-- `--run-mode`: `compare` runs original-vs-migrated benchmarks; `original` runs only the original pipeline.
-- `--model-preset`: one of `clip-vit-b-32`, `clip-vit-b-16`, `clip-vit-l-14`, `siglip-base-p16-224`, `siglip2-base-p32-256`, `siglip2-so400m-p14-384`.
-- `--model-name`: custom HuggingFace model id.
-- `--segmenter-strategy`: one explicit segmenter, such as `patch`, `slic`, or `gradient_guided`.
-- `--masker-strategy`: one explicit masker, such as `crossmodal_mean`, `vision_mean`, or `text_attn`.
-- `--num-coalitions`, `--batch-size`, `--tolerance`: benchmark sampling and validation controls.
-- `--cuda`: run on CUDA.
-- `--use-amp`: enable autocast in the migrated pipeline.
+Important CLI parameters:
 
-If `--segmenter-strategy` and `--masker-strategy` are omitted, the default stable strategy suite is used. For batch runs, edit one of the `benchmark_suite.pipeline_*.json` presets instead of changing code.
+| Parameter | Meaning |
+|---|---|
+| `--config` | JSON preset for batch benchmarks. |
+| `--dry-run` | Print planned runs without loading models. |
+| `--force` | Recompute existing run CSVs. |
+| `--case` | Single migrated game name. |
+| `--input` | Single image or manifest-backed input folder. |
+| `--text` | Required only for single-image input. |
+| `--run-mode` | `compare` for old-vs-migrated, `original` for original-only. |
+| `--model-preset` | Standard model preset. |
+| `--model-name` | Custom HuggingFace model id. |
+| `--segmenter-strategy` | Explicit segmenter strategy, such as `patch` or `slic`. |
+| `--masker-strategy` | Explicit masker strategy, such as `crossmodal_mean`, `vision_mean`, or `text_attn`. |
+| `--num-coalitions` | Number of sampled coalitions per run. |
+| `--batch-size` | Model batch size for coalition evaluation. |
+| `--tolerance` | Numerical equivalence threshold. |
+| `--cuda` | Run on CUDA. |
+| `--use-amp` | Use autocast in the migrated pipeline. |
 
-## Result Files
+`random_state` remains supported internally and defaults to `0`, but it is intentionally hidden
+from the main preset configs.
+
+## Results
 
 Each preset writes to its own result directory:
 
 ```text
-experiments/validation/results/<preset-name>/
-  summary.csv
-  plots/
-    max_output_diff_distribution.png
-    top_max_output_diff.png
-    mean_max_output_diff_heatmap.png
-    mean_runtime_heatmap.png
-  runs/
+experiments/validation/results/<suite-name>/
+  csv/
+    summary.csv
+    *_coverage_table.csv
     *_comparison.csv
+  plots/
+    *.png
 ```
 
-The CSV records the full run context, model metadata, segmenter/masker strategy metadata, original pipeline outputs, migrated pipeline outputs, output differences when player layouts match, and runtime fields.
+The `csv/` folders are ignored by Git. They can contain thousands of large run-level CSVs.
+The `plots/` folders are separate and can be committed when needed.
 
 Run CSV filenames are intentionally short:
 
@@ -130,26 +139,106 @@ Run CSV filenames are intentionally short:
 <case>_<image_stem>_model_<model>_seg_<segmenter>_mask_<masker>_<short_hash>_comparison.csv
 ```
 
-The full text input, full caption, model parameters, strategy parameters, and sampling parameters are stored inside the CSV instead of the filename.
+Full text, full caption, model parameters, strategy parameters, sampling parameters, outputs,
+differences, and runtime fields are stored inside the CSV.
 
-Strict numerical equivalence should use `patch/crossmodal_mean`, because it preserves the original patch-based player layout. Strategies such as `slic` or `gradient_guided` are benchmark strategies; their player layout differs from the original pipeline, so coalition-by-coalition equivalence is not directly meaningful.
+## Generate Plots
 
-## Summaries And Plots
+Plots are generated from existing CSVs. The plot mode is explicit and must match the suite.
 
-Summarize existing CSV results:
+Strict:
 
 ```powershell
-python .\experiments\validation\summarize_results.py
+python .\experiments\validation\summarize_results.py --input .\experiments\validation\results\benchmark_pipeline_strict_mscoco100_clip_b32\csv --mode strict
 ```
 
-The summary script recursively scans all preset folders under `experiments/validation/results/`.
+Models:
 
-Recommended plot interpretation:
+```powershell
+python .\experiments\validation\summarize_results.py --input .\experiments\validation\results\benchmark_pipeline_models_mscoco100\csv --mode models
+```
 
-- `max_output_diff_distribution.png`: distribution of run-level max output differences.
-- `top_max_output_diff.png`: the largest-difference runs for quick debugging.
-- `mean_max_output_diff_heatmap.png`: aggregated mean max difference by case and model.
-- `mean_runtime_heatmap.png`: aggregated migrated runtime by case and strategy.
-- `summary.csv`: preferred source for additional grouped plots by case, model, strategy, and input.
+Strategies:
 
-The benchmark does not generate one bar per run by default. That format is not readable for the current 1900-run staged benchmark.
+```powershell
+python .\experiments\validation\summarize_results.py --input .\experiments\validation\results\benchmark_pipeline_strategies_mscoco100_clip_b32\csv --mode strategies
+```
+
+Crossmodal:
+
+```powershell
+python .\experiments\validation\summarize_results.py --input .\experiments\validation\results\benchmark_pipeline_crossmodal_mscoco100_clip_b32\csv --mode crossmodal
+```
+
+## Plot Interpretation
+
+### Strict
+
+Use this suite to answer:
+
+```text
+Does the migrated pipeline reproduce the original pipeline outputs?
+```
+
+Main outputs:
+
+- `strict_coverage_table.png`: pass count, max output difference, and runtime by validation case.
+- `strict_max_output_diff_distribution.png`: run-level max output difference distribution.
+- `strict_runtime_by_case.png`: original baseline runtime vs migrated pipeline runtime.
+
+### Models
+
+Use this suite to answer:
+
+```text
+Does the pipeline work across multiple vision-language model backbones?
+```
+
+Main outputs:
+
+- `models_coverage_table.png`: run count, pass count, max output difference, and runtime by model.
+- `models_runtime_by_model.png`: original baseline runtime vs migrated pipeline runtime.
+- `models_max_output_diff_by_model.png`: worst output difference per model.
+- `models_pass_rate.png`: pass rate per model.
+
+### Strategies
+
+Use this suite to answer:
+
+```text
+Do migrated segmenter/masker strategies run successfully, and what runtime cost do they add?
+```
+
+Do not interpret non-standard strategies as strict-equivalence failures. Only `patch/crossmodal_mean`
+preserves the original patch-based player layout. Strategies such as `vision_mean`, `text_attn`,
+and `slic` intentionally change masking or player layout, so old-vs-new coalition equivalence is
+not always meaningful.
+
+Main outputs:
+
+- `strategies_coverage_table.png`: completed runs, strict-equivalent runs, baseline-comparable runs, and runtime.
+- `strategies_baseline_deviation_by_strategy.png`: deviation from baseline only where baseline comparison is meaningful.
+- `strategies_migrated_runtime_by_strategy.png`: migrated pipeline runtime by strategy.
+- `strategies_runtime_case_heatmap.png`: migrated runtime by case and strategy.
+
+### Crossmodal
+
+Use this suite to answer:
+
+```text
+Does the benchmark cover image-text coalition games?
+```
+
+Main outputs:
+
+- `crossmodal_coverage_table.png`: crossmodal pass and runtime summary.
+- `crossmodal_max_output_diff_distribution.png`: crossmodal output-difference distribution.
+- `crossmodal_original_vs_migrated_runtime.png`: original-vs-migrated runtime scatter.
+- `crossmodal_runtime_by_sample.png`: original and migrated runtime by image-text sample.
+
+## Notes
+
+- `patch/crossmodal_mean` is the strict-equivalence baseline.
+- Strategy benchmarks primarily measure coverage and runtime, not explanation quality.
+- These plots validate output equivalence and pipeline coverage; they do not evaluate explanation quality.
+- Large CSV outputs should remain local. Commit selected plots only when they are needed for reporting.
