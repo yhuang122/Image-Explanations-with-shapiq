@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-
+import numpy as np
 
 def write_aid_plots(summary_path: Path, curves_path: Path, plots_dir: Path) -> dict[str, str]:
     if not summary_path.exists() or not curves_path.exists():
@@ -33,6 +33,7 @@ def write_aid_plots(summary_path: Path, curves_path: Path, plots_dir: Path) -> d
     )
 
     curve_plots = _write_mean_curve_plots(curves, plots_dir)
+    sample_curve_plots = _write_sample_curve_grid_plots(completed, curves, plots_dir)
 
     scatter_plot = plots_dir / "quality_aid_quality_runtime_tradeoff.png"
     _write_runtime_scatter(scatter_plot, score)
@@ -47,6 +48,8 @@ def write_aid_plots(summary_path: Path, curves_path: Path, plots_dir: Path) -> d
     }
     if curve_plots:
         plot_paths["curve_plots"] = [str(path) for path in curve_plots]
+    if sample_curve_plots:
+        plot_paths["sample_curve_grid_plots"] = [str(path) for path in sample_curve_plots]
     return plot_paths
 
 
@@ -119,7 +122,11 @@ def _write_mean_curve_plots(curves, plots_dir: Path) -> list[Path]:
         ax.set_title(f"AID Quality: Mean Deletion Curves\n{model_preset} / {strategy_name}")
         ax.set_xlabel("Removed player fraction")
         ax.set_ylabel("Normalized model output")
-        ax.set_ylim(-0.05, 1.05)
+        y_min = min(-0.05, float(mean_curves["normalized_output"].quantile(0.01)) - 0.05)
+        y_max = max(1.05, float(mean_curves["normalized_output"].quantile(0.99)) + 0.05)
+        ax.set_ylim(y_min, y_max)
+        ax.axhline(0.0, color="gray", linewidth=0.8, alpha=0.6)
+        ax.axhline(1.0, color="gray", linewidth=0.8, alpha=0.6)
         ax.legend(fontsize=7, ncol=1, loc="best")
         fig.tight_layout()
         path = plots_dir / f"quality_aid_mean_deletion_curves_{_slug(model_preset)}_{_slug(strategy_name)}.png"
@@ -129,6 +136,106 @@ def _write_mean_curve_plots(curves, plots_dir: Path) -> list[Path]:
     return paths
 
 
+def _write_sample_curve_grid_plots(summary, curves, plots_dir: Path, max_samples: int = 10) -> list[Path]:
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+
+    interaction_curves = curves[curves["curve_source"] == "interaction"].copy()
+    if interaction_curves.empty:
+        return []
+
+    for column in ("removed_fraction", "normalized_output"):
+        interaction_curves[column] = pd.to_numeric(interaction_curves[column], errors="coerce")
+    summary = summary.copy()
+    for column in ("sample_index", "aid_area_between_curves", "n_players"):
+        summary[column] = pd.to_numeric(summary[column], errors="coerce")
+
+    paths = []
+    group_fields = ["model_preset", "strategy_name", "method_name"]
+    for group_key, group_summary in summary.groupby(group_fields, dropna=False):
+        group_summary = group_summary.sort_values(["sample_index", "run_id"]).head(max_samples)
+        if group_summary.empty:
+            continue
+
+        n_samples = len(group_summary)
+        n_cols = 5 if n_samples > 5 else max(1, n_samples)
+        n_rows = 2 if n_samples > 5 else 1
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows))
+        axes = np.atleast_1d(axes).flatten()
+        for position, (axis, (_, row)) in enumerate(zip(axes, group_summary.iterrows())):
+            run_curves = interaction_curves[interaction_curves["run_id"] == row["run_id"]]
+            draw_sample_curve(axis, run_curves, row, position)
+
+        for axis in axes[len(group_summary) :]:
+            axis.set_visible(False)
+
+        model_preset, strategy_name, method_name = group_key
+        fig.suptitle(
+            f"AID Curves - {n_samples} samples\n{model_preset} / {strategy_name}\n{method_name}",
+            fontsize=10 if n_cols < 3 else 13,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.88))
+        path = plots_dir / (
+            "quality_aid_sample_curves_"
+            f"{_slug(model_preset)}_{_slug(strategy_name)}_{_slug(method_name)}.png"
+        )
+        fig.savefig(path, dpi=180)
+        plt.close(fig)
+        paths.append(path)
+    return paths
+
+
+def draw_sample_curve(axis, curves, summary_row, position: int) -> None:
+    mif = curves[curves["curve_name"] == "most_important_first_deletion"].sort_values("removed_fraction")
+    lif = curves[curves["curve_name"] == "least_important_first_deletion"].sort_values("removed_fraction")
+    if mif.empty or lif.empty:
+        axis.axis("off")
+        axis.text(0.5, 0.5, "Missing curve", ha="center", va="center")
+        return
+
+    x = mif["removed_fraction"].to_numpy(dtype=float)
+    mif_y = mif["normalized_output"].to_numpy(dtype=float)
+    lif_y = lif["normalized_output"].to_numpy(dtype=float)
+
+    axis.plot(x, mif_y, "r-", linewidth=1.5, label="MIF")
+    axis.plot(x, lif_y, "b-", linewidth=1.5, label="LIF")
+    axis.fill_between(x, lif_y, mif_y, where=(lif_y >= mif_y), alpha=0.12, color="green")
+    axis.fill_between(x, lif_y, mif_y, where=(lif_y < mif_y), alpha=0.12, color="red")
+
+    axis.set_xlim(-0.02, 1.02)
+
+    finite_values = np.concatenate(
+        [
+            mif_y[np.isfinite(mif_y)],
+            lif_y[np.isfinite(lif_y)],
+        ]
+    )
+
+    if finite_values.size:
+        y_min = min(0.0, float(finite_values.min())) - 0.05
+        y_max = max(1.0, float(finite_values.max())) + 0.05
+        if y_max - y_min < 0.1:
+            y_min -= 0.05
+            y_max += 0.05
+        axis.set_ylim(y_min, y_max)
+    else:
+        axis.set_ylim(-0.05, 1.05)
+
+    axis.axhline(0.0, color="gray", linewidth=0.6, alpha=0.5)
+    axis.axhline(1.0, color="gray", linewidth=0.6, alpha=0.5)
+
+    axis.set_title(
+        f"#{int(summary_row['sample_index'])}  "
+        f"AID={float(summary_row['aid_area_between_curves']):.3f}  "
+        f"({int(summary_row['n_players'])}p)",
+        fontsize=9,
+    )
+    if position >= 5:
+        axis.set_xlabel("Fraction removed")
+    if position % 5 == 0:
+        axis.set_ylabel("Norm. score")
+
 def _write_runtime_scatter(path: Path, score) -> None:
     import matplotlib.pyplot as plt
 
@@ -136,7 +243,7 @@ def _write_runtime_scatter(path: Path, score) -> None:
     ax.scatter(score["mean_explanation_runtime_s"], score["mean_aid_area"], s=70, color="#228833")
     for _, row in score.iterrows():
         ax.annotate(
-            f"{row['model_preset']} / {row['method_name']}",
+            f"{row['model_preset']} / {row['strategy_name']}",
             (row["mean_explanation_runtime_s"], row["mean_aid_area"]),
             fontsize=7,
             xytext=(4, 4),
