@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Dict
 import torch
 
-from ImputerFactory.data import PhysicalMask, ProcessorOutput, MaskerConfig
+from ..data import PhysicalMask, ProcessorOutput, MaskerConfig
 
 
 class BaseMasker(ABC):

@@ -20,9 +20,9 @@
 | | `VisionMeanMasker` | ✅ Done | Pure image occlusion (registered as ``"vision_mean"``) |
 | | `TextAttentionMasker` | ✅ Done | Pure text occlusion (registered as ``"text_attn"``) |
 | | `CrossModalMeanMasker` | ✅ Done | Composite (``"crossmodal_mean"``), default for VLMs |
-| | `VisionBlurMasker` | ⬜ Not started | Gaussian blur occlusion; pre-computed kernel via conv2d |
+| | `VisionBlurMasker` | ✅ Done | Gaussian blur occlusion; CPU skimage + blend |
 | | `CrossModalBlurMasker` | ⬜ Not started | Composite (``"crossmodal_blur"``): VisionBlurMasker + TextAttentionMasker |
-| | `CrossModalGaussianMasker` | ⏳ Skeleton | Will be replaced by `VisionBlurMasker` + `CrossModalBlurMasker` |
+| | `CrossModalBlurMasker` | ✅ Done | Composite: VisionBlurMasker + TextAttentionMasker. Key kept as alias. |
 | | `AttentionMasker` | ⏳ Stub | Needs negative-infinity self-attention injection |
 | **Core** | `ImageImputer` | ✅ Done | `forward_1d` + `forward_crossmodal` with batching & device mgmt |
 | **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalMeanMasker |
@@ -167,7 +167,7 @@ Recorded AID values are smoke/integration outputs; strict ±5% reporting should 
 | # | Feature | Details | Status |
 |---|---|---|---|
 | B3.1 | `AttentionMasker` implementation | Hook self-attention, inject -inf mask matrices. Requires PyTorch `register_forward_hook` or HF `output_attentions` override | ⬜ Not started |
-| B3.2 | `VisionBlurMasker` implementation | Gaussian blur occlusion: pre-compute kernel (σ=3.0), apply via conv2d, blend masked regions. Replaces old `CrossModalGaussianMasker` skeleton | ⬜ Not started |
+| B3.2 | `VisionBlurMasker` implementation | Gaussian blur occlusion: skimage CPU blur + blend with mask. | ✅ Done |
 
 #### B4. Backend Adapter Extraction (PyTorch only)
 

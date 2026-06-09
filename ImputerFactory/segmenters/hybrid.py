@@ -1,5 +1,5 @@
 from .base import BaseSegmenter
-from ImputerFactory.data import SegmenterConfig
+from ..data import SegmenterConfig
 
 from . import register_segmenter
 

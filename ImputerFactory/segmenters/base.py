@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 import numpy as np
 
-from ImputerFactory.data import SegmenterConfig, SpatialLayout, PhysicalMask
+from ..data import SegmenterConfig, SpatialLayout, PhysicalMask
 
 
 class BaseSegmenter(ABC):

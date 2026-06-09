@@ -19,7 +19,7 @@ import torch
 
 from .base import BaseSegmenter
 from . import register_segmenter
-from ImputerFactory.data import SegmenterConfig, SpatialLayout, PhysicalMask
+from ..data import SegmenterConfig, SpatialLayout, PhysicalMask
 
 try:
     from skimage.segmentation import slic as _skimage_slic

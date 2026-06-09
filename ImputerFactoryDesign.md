@@ -66,7 +66,7 @@
 **Sole responsibility**: Universal data protocol — define the shapes and semantics of objects passed between modules.
 
 - `SegmenterConfig`: typed segmenter configuration. Caller provides `strategy` + per-strategy params (`PatchParams`, `SlicParams`, `GradientGuidedParams`). Factory populates model metadata (`model_type`, `image_size`, `patch_size`, `n_channels`, `grid_size`, `n_players_image`, `n_players_text`, `text_total_length`). Consumed by Segmenters.
-- `MaskerConfig`: typed masker configuration. Caller provides `strategy` + per-strategy params (`CrossModalMeanParams`, `CrossModalGaussianParams`, `VisionMeanParams`, `TextAttentionParams`). Consumed by Maskers.
+- `MaskerConfig`: typed masker configuration. Caller provides `strategy` + per-strategy params (`CrossModalMeanParams`, `VisionBlurParams`, `VisionMeanParams`, `TextAttentionParams`). Consumed by Maskers.
 - `SpatialLayout`: immutable metadata (produced by Segmenter, consumed by Imputer)
 - `PhysicalMask`: concrete tensor masks (produced by Segmenter/imputer translation, consumed by Masker)
 - `ProcessorOutput`: standardized model inputs (produced by Factory, consumed by Masker and Imputer)
@@ -128,7 +128,7 @@ Coalitions (np.bool)                Visualization / Notebook
 ### `ImputerFactory/data.py`
 Six dataclasses serve as the universal data protocol:
 - **`SegmenterConfig`**: Typed segmenter configuration. Carries `strategy` ("patch", "slic", "gradient_guided") + per-strategy params (`PatchParams`, `SlicParams`, `GradientGuidedParams`) + Factory-populated model metadata. Defaults to "patch".
-- **`MaskerConfig`**: Typed masker configuration. Carries `strategy` ("crossmodal_mean", "crossmodal_gaussian", "vision_mean", "text_attn") + per-strategy params. Defaults to "crossmodal_mean".
+- **`MaskerConfig`**: Typed masker configuration. Carries `strategy` ("crossmodal_mean", "crossmodal_blur", "vision_mean", "vision_blur", "text_attn") + per-strategy params. Defaults to "crossmodal_mean".
 - **`SpatialLayout`**: Immutable metadata describing the spatial division. Produced once by Segmenter, consumed by Imputer.
 - **`PhysicalMask`**: Concrete tensor masks. `image_binary_mask` (N, C, H, W) float + `text_attention_mask` (N, L) int.
 - **`ProcessorOutput`**: Wraps `pixel_values`, `input_ids`, `attention_mask` with a `to_dict()` for model forwarding.
@@ -170,11 +170,11 @@ Six dataclasses serve as the universal data protocol:
 - Internally instantiates both atomic maskers; `apply()` delegates image → Vision, then text → Text
 - Owns no low-level tensor math — purely an orchestration layer
 
-### `ImputerFactory/maskers/crossmodal_gaussian.py` — CrossModalGaussianMasker (skeleton)
-- **Sole responsibility**: Composite Pattern with Gaussian-mean image occlusion
-- Registered as `"crossmodal_gaussian"`
+### `ImputerFactory/maskers/crossmodal_blur.py` — CrossModalBlurMasker
+- **Sole responsibility**: Composite Pattern with Gaussian-blur image occlusion
+- Registered as `"crossmodal_blur"`
 - Text side: delegates to TextAttentionMasker (`"text_attn"`)
-- Image side: stub — falls back to VisionMeanMasker; GaussianMean implementation pending
+- Image side: delegates to VisionBlurMasker (`"vision_blur"`) — CPU Gaussian blur + blend
 
 ### `ImputerFactory/core/imputer.py` — ImageImputer
 - Constructor: receives `use_amp` (bool) directly; all spatial metadata derived from `segmenter.get_layout()` (`SpatialLayout`)
@@ -267,7 +267,7 @@ imputer = factory.build(model, processor, img, txt, segmenter_config=seg_cfg)
 
 # Custom masker
 from ImputerFactory import MaskerConfig
-msk_cfg = MaskerConfig(strategy="crossmodal_gaussian")
+msk_cfg = MaskerConfig(strategy="crossmodal_blur")
 imputer = factory.build(model, processor, img, txt, masker_config=msk_cfg)
 ```
 
@@ -276,12 +276,12 @@ imputer = factory.build(model, processor, img, txt, masker_config=msk_cfg)
 | Class | Fields |
 |---|---|
 | `SegmenterConfig` | `strategy` ("patch"/"slic"/"gradient_guided"), `patch`, `slic`, `gradient_guided` + Factory-populated model metadata |
-| `MaskerConfig` | `strategy` ("crossmodal_mean"/"crossmodal_gaussian"/"vision_mean"/"text_attn"), `crossmodal_mean`, `crossmodal_gaussian`, `vision_mean`, `text_attn` |
+| `MaskerConfig` | `strategy` ("crossmodal_mean"/"crossmodal_blur"/"vision_mean"/"vision_blur"/"text_attn"), `crossmodal_mean`, `vision_blur`, `vision_mean`, `text_attn` |
 | `PatchParams` | (empty) |
 | `SlicParams` | `n_segments` (49), `compactness` (10.0), `sigma` (0.0) |
 | `GradientGuidedParams` | `n_segments` (None → auto) |
 | `CrossModalMeanParams` | (empty) |
-| `CrossModalGaussianParams` | (empty — skeleton) |
+| `VisionBlurParams` | `sigma` (3.0) |
 | `VisionMeanParams` | (empty) |
 | `TextAttentionParams` | (empty) |
 
@@ -307,5 +307,6 @@ build(model, processor, image, text, segmenter_config=..., masker_config=..., us
 | `"vision_mean"` | VisionMeanMasker |
 | `"text_attn"` | TextAttentionMasker |
 | `"crossmodal_mean"` | CrossModalMeanMasker (default) |
-| `"crossmodal_gaussian"` | CrossModalGaussianMasker (skeleton) |
+| `"crossmodal_blur"` | CrossModalBlurMasker |
+| `"vision_blur"` | VisionBlurMasker |
 | `"attention"` | AttentionMasker (stub) |

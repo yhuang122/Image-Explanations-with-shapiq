@@ -39,8 +39,9 @@ class ImageImputerFactory:
 
     Masker strategies (``MaskerConfig.strategy``):
         - ``"crossmodal_mean"`` (default) — composite: vision-mean + text-attn.
-        - ``"crossmodal_gaussian"`` — composite: vision-gaussian (stub) + text-attn.
+        - ``"crossmodal_blur"`` — composite: vision-blur (Gaussian) + text-attn.
         - ``"vision_mean"`` — image-only multiplicative mask.
+        - ``"vision_blur"`` — image-only Gaussian blur occlusion.
         - ``"text_attn"`` — text-only attention-mask swap.
     """
 

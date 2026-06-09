@@ -4,7 +4,7 @@ import torch
 
 from .base import BaseSegmenter
 from . import register_segmenter
-from ImputerFactory.data import SegmenterConfig, SpatialLayout, PhysicalMask
+from ..data import SegmenterConfig, SpatialLayout, PhysicalMask
 
 
 @register_segmenter("patch")
