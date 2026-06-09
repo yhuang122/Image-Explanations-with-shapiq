@@ -20,7 +20,7 @@ import torch
 
 from .base import BaseSegmenter
 from . import register_segmenter
-from ImputerFactory.data import SegmenterConfig, SpatialLayout, PhysicalMask
+from ..data import SegmenterConfig, SpatialLayout, PhysicalMask
 
 # scikit-image is declared in env.yml. Lazy-imported here so static analysis
 # can still inspect this module if the dep is missing in a stripped env.

@@ -15,7 +15,6 @@ Exports:
     TextAttentionMasker       — Pure text occlusion (attention_mask swap).
     CrossModalMeanMasker      — Composite: VisionMeanMasker + TextAttentionMasker.
     CrossModalBlurMasker      — Composite: VisionBlurMasker + TextAttentionMasker.
-    CrossModalGaussianMasker  — Composite: GaussianMean (stub) + TextAttentionMasker.
 """
 
 from .factory import ImageImputerFactory
@@ -27,7 +26,6 @@ from .data import (
     SlicParams,
     GradientGuidedParams,
     CrossModalMeanParams,
-    CrossModalGaussianParams,
     VisionMeanParams,
     TextAttentionParams,
     ProcessorOutput,
@@ -41,6 +39,5 @@ from .maskers import (
     TextAttentionMasker,
     CrossModalMeanMasker,
     CrossModalBlurMasker,
-    CrossModalGaussianMasker,
 )
 from .regression import crossmodal_approximation, chunked_aggregate

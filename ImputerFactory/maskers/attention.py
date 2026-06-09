@@ -19,7 +19,7 @@ from typing import Optional
 
 from .base import BaseMasker
 from . import register_masker
-from ImputerFactory.data import MaskerConfig, PhysicalMask, ProcessorOutput
+from ..data import MaskerConfig, PhysicalMask, ProcessorOutput
 
 
 @register_masker("attention")

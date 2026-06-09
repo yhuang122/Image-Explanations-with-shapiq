@@ -10,14 +10,10 @@ original according to the binary mask. This produces a smoother transition
 at occlusion boundaries and better preserves the input distribution for
 CNN-based models.
 
-Design (Phase 1 — CPU, current):
+Implementation:
     For each batch element, convert ``pixel_values`` from GPU to CPU numpy,
     call ``skimage.filters.gaussian(image, sigma)`` per channel, blend, and
     convert back to torch on the original device.
-
-Design (Phase 2 — GPU, future):
-    Replace CPU convolution with a pre-computed ``torch.nn.functional.conv2d``
-    kernel to avoid CPU↔GPU transfer. Semantics are identical.
 
 Blending formula:
     ``output = original * mask + blurred * (1 - mask)``
@@ -38,7 +34,7 @@ import torch
 
 from .base import BaseMasker
 from . import register_masker
-from ImputerFactory.data import PhysicalMask, ProcessorOutput, MaskerConfig
+from ..data import PhysicalMask, ProcessorOutput, MaskerConfig
 
 try:
     from skimage.filters import gaussian as _gaussian_blur
@@ -50,8 +46,7 @@ except ImportError:
 class VisionBlurMasker(BaseMasker):
     """Image occlusion via Gaussian blur in masked regions.
 
-    Uses ``skimage.filters.gaussian`` on CPU for the blur (Phase 1).
-    Future: replace with GPU conv2d to eliminate CPU↔GPU transfer.
+    Uses ``skimage.filters.gaussian`` on CPU for the blur.
 
     Contracts:
         - Only ``pixel_values`` is modified; ``input_ids`` and
@@ -120,7 +115,7 @@ class VisionBlurMasker(BaseMasker):
         mask = physical_mask.image_binary_mask                # (N, C, H, W)
         device = pixel_values.device
 
-        # ── Phase 1: CPU-based per-channel Gaussian blur ──────────────
+        # ── CPU-based per-channel Gaussian blur ──────────────────────────
         # skimage operates on numpy arrays, so we transfer to CPU once.
         im_np = pixel_values.detach().cpu().numpy()            # (N, C, H, W)
         mask_np = mask.detach().cpu().numpy()                  # (N, C, H, W)

@@ -103,17 +103,7 @@ class CrossModalMeanParams:
     pass
 
 
-@dataclass
-class CrossModalGaussianParams:
-    """
-    Cross-modal occlusion (composite: vision-gaussian + text-attention).
-    No configurable parameters.
 
-    .. note::
-        Skeleton only — the Gaussian-mean image occlusion is not yet
-        implemented.
-    """
-    pass
 
 
 @dataclass
@@ -131,7 +121,7 @@ class TextAttentionParams:
 
 
 @dataclass
-class BlurParams:
+class VisionBlurParams:
     """Gaussian-blur image occlusion parameters.
 
     Used by :class:`VisionBlurMasker` to replace masked pixels with a
@@ -164,9 +154,8 @@ class MaskerConfig:
     # ── Caller-provided ──────────────────────────────────────────────────
     strategy: str = "crossmodal_mean"
     crossmodal_mean: CrossModalMeanParams = field(default_factory=CrossModalMeanParams)
-    crossmodal_gaussian: CrossModalGaussianParams = field(default_factory=CrossModalGaussianParams)
     vision_mean: VisionMeanParams = field(default_factory=VisionMeanParams)
-    vision_blur: BlurParams = field(default_factory=BlurParams)
+    vision_blur: VisionBlurParams = field(default_factory=VisionBlurParams)
     text_attn: TextAttentionParams = field(default_factory=TextAttentionParams)
 
     @property

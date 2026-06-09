@@ -13,7 +13,7 @@ from typing import Optional
 from .base import BaseMasker
 from .vision_mean import VisionMeanMasker
 from .text_attention import TextAttentionMasker
-from ImputerFactory.data import PhysicalMask, ProcessorOutput, MaskerConfig
+from ..data import PhysicalMask, ProcessorOutput, MaskerConfig
 from . import register_masker
 
 

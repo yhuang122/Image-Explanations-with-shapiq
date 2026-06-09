@@ -9,7 +9,7 @@ import torch
 
 from .base import BaseMasker
 from . import register_masker
-from ImputerFactory.data import PhysicalMask, ProcessorOutput
+from ..data import PhysicalMask, ProcessorOutput
 
 
 @register_masker("text_attn")

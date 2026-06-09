@@ -12,9 +12,8 @@ the image-side occlusion strategy (Gaussian blur instead of zero-out mean).
 Registered as ``"crossmodal_blur"`` in the masker registry.
 
 .. note::
-    Skeleton only. Requires ``VisionBlurMasker`` to be fully implemented
-    first (Team B task B3.2). During development, ``VisionBlurMasker``
-    passes through unchanged (falls back to no-op).
+    Requires ``VisionBlurMasker``. See ``VisionBlurMasker`` for
+    the CPU Gaussian blur implementation.
 """
 
 from typing import Optional
@@ -22,7 +21,7 @@ from typing import Optional
 from .base import BaseMasker
 from .vision_blur import VisionBlurMasker
 from .text_attention import TextAttentionMasker
-from ImputerFactory.data import PhysicalMask, ProcessorOutput, MaskerConfig
+from ..data import PhysicalMask, ProcessorOutput, MaskerConfig
 from . import register_masker
 
 
@@ -40,7 +39,7 @@ class CrossModalBlurMasker(BaseMasker):
     Usage:
         From a notebook or experiment::
 
-            from ImputerFactory import MaskerConfig, CrossModalBlurParams
+            from ImputerFactory import MaskerConfig
             cfg = MaskerConfig(strategy="crossmodal_blur")
             imputer = factory.build(model, processor, img, txt, masker_config=cfg)
 
