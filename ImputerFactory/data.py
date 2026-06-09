@@ -131,6 +131,21 @@ class TextAttentionParams:
 
 
 @dataclass
+class BlurParams:
+    """Gaussian-blur image occlusion parameters.
+
+    Used by :class:`VisionBlurMasker` to replace masked pixels with a
+    local Gaussian-weighted average rather than zeroing them out.
+
+    Attributes:
+        sigma: Standard deviation of the Gaussian kernel.
+            Larger = softer (more blurred) occlusion, smaller = sharper.
+            Default 3.0.
+    """
+    sigma: float = 3.0
+
+
+@dataclass
 class MaskerConfig:
     """
     Complete configuration for a Masker.
@@ -151,6 +166,7 @@ class MaskerConfig:
     crossmodal_mean: CrossModalMeanParams = field(default_factory=CrossModalMeanParams)
     crossmodal_gaussian: CrossModalGaussianParams = field(default_factory=CrossModalGaussianParams)
     vision_mean: VisionMeanParams = field(default_factory=VisionMeanParams)
+    vision_blur: BlurParams = field(default_factory=BlurParams)
     text_attn: TextAttentionParams = field(default_factory=TextAttentionParams)
 
     @property
