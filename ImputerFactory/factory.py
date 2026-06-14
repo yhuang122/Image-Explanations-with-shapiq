@@ -126,7 +126,10 @@ class ImageImputerFactory:
         segmenter_config.n_players_image = segmenter.get_layout().n_players_image
 
         # ── 6. Create Masker ────────────────────────────────────────────
-        masker = self._create_masker(masker_config)
+        masker_kwargs = {}
+        if masker_config.strategy == "attention":
+            masker_kwargs["model"] = model
+        masker = self._create_masker(masker_config, **masker_kwargs)
 
         # ── 7. Build the standardized 1-sample inputs ───────────────────
         inputs_original = ProcessorOutput(
@@ -235,8 +238,8 @@ class ImageImputerFactory:
         return cls(config=config, **extra_kwargs)
 
     @staticmethod
-    def _create_masker(config: MaskerConfig) -> BaseMasker:
+    def _create_masker(config: MaskerConfig, **kwargs) -> BaseMasker:
         """Look up and instantiate the Masker via registry."""
         cls = get_masker(config.strategy)
-        return cls(config=config)
+        return cls(config=config, **kwargs)
 
