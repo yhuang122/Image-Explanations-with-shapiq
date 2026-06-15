@@ -21,8 +21,7 @@
 | | `TextAttentionMasker` | ✅ Done | Pure text occlusion (registered as ``"text_attn"``) |
 | | `CrossModalMeanMasker` | ✅ Done | Composite (``"crossmodal_mean"``), default for VLMs |
 | | `VisionBlurMasker` | ✅ Done | Gaussian blur occlusion; CPU skimage + blend |
-| | `CrossModalBlurMasker` | ⬜ Not started | Composite (``"crossmodal_blur"``): VisionBlurMasker + TextAttentionMasker |
-| | `CrossModalBlurMasker` | ✅ Done | Composite: VisionBlurMasker + TextAttentionMasker. Key kept as alias. |
+| | `CrossModalBlurMasker` | ✅ Done | Composite (``"crossmodal_blur"``): VisionBlurMasker + TextAttentionMasker. |
 | | `AttentionMasker` | ⏳ Stub | Needs negative-infinity self-attention injection |
 | **Core** | `ImageImputer` | ✅ Done | `forward_1d` + `forward_crossmodal` with batching & device mgmt |
 | **Factory** | `ImageImputerFactory` | ✅ Done | Auto-detect model type, assemble PatchSegmenter + CrossModalMeanMasker |
@@ -206,7 +205,7 @@ Recorded AID values are smoke/integration outputs; strict ±5% reporting should 
 | P8.2 | Port abstract contracts | Move `BaseSegmenter`, `BaseMasker`, data types to `shapiq/imputer/vision/base.py` | P8.1 ✅ | ✅ Done |
 | P8.3 | Port PatchSegmenter + VisionMeanMasker + VisionImputer + VisionLanguageGame | Core pipeline: PatchSegmenter + VisionMeanMasker → VisionImputer → VisionLanguageGame | P8.2 ✅ | ✅ Done |
 | P8.4 | Write upstream tests + example notebook | 18 unit tests + `docs/examples/vision_language_clip.ipynb` | P8.3 ✅ | ✅ Done |
-| P8.5 | Submit PR to mmschlk/shapiq | Open PR with abstract bases + one concrete pipeline | P8.4 ✅ | ⬜ Not started |
+| P8.5 | Submit PR to mmschlk/shapiq | Open PR with abstract bases + one concrete pipeline | P8.4 ✅ | ✅ Done |
 | P8.6 | Adopt upstream in our project | Replace `ImputerFactory` imports with `shapiq.imputer.vision`; validate equivalence | P8.5 ✅ (merged) | ⬜ Not started |
 
 | # | Responsibility | Status |
