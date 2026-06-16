@@ -10,6 +10,24 @@ This benchmark validates **value-function behavior** and **pipeline coverage**. 
 evaluate explanation quality. Explanation quality validation belongs in `../quality/` and should
 use AID, insertion-deletion, and faithfulness-style quality metrics.
 
+## Validation Summary
+
+This benchmark is the numerical validation side of the migration work:
+
+```text
+same image + same text + same model + same sampled coalitions
+-> original FIxLIP-style game output
+-> migrated pipeline game output
+-> absolute output difference
+```
+
+For strict equivalence runs, the key question is whether the maximum absolute output difference
+stays below `1e-4`. For broader model and strategy suites, the key question is whether the migrated
+pipeline runs successfully and records useful runtime or deviation information.
+
+Use `../quality/` when the question changes from "are the value-function outputs equivalent?" to
+"are the generated explanations useful?"
+
 ## Scope
 
 This benchmark is used to answer three questions:
@@ -89,23 +107,36 @@ For a single image, pass both image and text explicitly:
 
 ## Preset Suites
 
+The core equivalence benchmark uses four suites. These cover strict A2 equivalence, A3 model
+coverage, migrated strategy compatibility, and crossmodal player coverage.
+
 | Preset | Plot mode | Purpose | Planned runs |
 |---|---|---|---:|
-| `benchmark_suite.equivalence_strict.json` | `strict` | Strict original-vs-migrated numerical equivalence for `patch/crossmodal_mean`. | 200 |
-| `benchmark_suite.equivalence_models.json` | `models` | Model coverage for CLIP, SigLIP, and SigLIP2 model presets. | 800 |
+| `benchmark_suite.equivalence_strict.json` | `strict` | Strict original-vs-migrated numerical equivalence for all 8 migrated cases using each case's default model. | 800 |
+| `benchmark_suite.equivalence_models.json` | `models` | A3 model coverage for CLIP ViT-B/32, CLIP ViT-B/16, CLIP ViT-L/14, SigLIP, and SigLIP2 so400m. | 1000 |
 | `benchmark_suite.equivalence_strategies.json` | `strategies` | Migrated strategy coverage plus baseline-deviation comparison. | 800 |
 | `benchmark_suite.equivalence_crossmodal.json` | `crossmodal` | Crossmodal image-text player value-function coverage. | 100 |
-| `benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part1.json` | `strategies` | Insertion-deletion over 100 images for CLIP + SigLIP with the first supported strategy group. | 800 |
-| `benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part2.json` | `strategies` | Insertion-deletion over 100 images for CLIP + SigLIP with the second supported strategy group. | 1200 |
 
-Running all four current presets gives:
+Running the four staged A2/A3 presets gives:
 
-    200 + 800 + 800 + 100 = 1900 planned runs
+    800 + 1000 + 800 + 100 = 2700 planned runs
 
 This is staged full-pipeline validation, not an exhaustive Cartesian-product benchmark. A naive
 full product over 8 cases, 100 images, 6 model presets, and 4 strategies would require:
 
     8 * 100 * 6 * 4 = 19200 run-level combinations
+
+Two additional insertion-deletion suites are kept as optional targeted coverage for the original
+CLIP + SigLIP strategy request. They are not required for the core A2/A3 equivalence pass, and
+they should not be used as explanation-quality evidence. Full segmenter/masker quality comparison
+belongs in `../quality/`.
+
+| Optional preset | Plot mode | Purpose | Planned runs |
+|---|---|---|---:|
+| `benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part1.json` | `strategies` | Insertion-deletion compatibility over 100 images for CLIP + SigLIP with the first supported strategy group. | 800 |
+| `benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part2.json` | `strategies` | Insertion-deletion compatibility over 100 images for CLIP + SigLIP with the second supported strategy group. | 1200 |
+
+    part1 + part2 = 800 + 1200 = 2000 planned runs
 
 ## Recommended First Check
 

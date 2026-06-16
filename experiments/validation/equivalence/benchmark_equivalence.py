@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING
@@ -52,6 +54,30 @@ if TYPE_CHECKING:
 
 
 sys.path.insert(0, str(PROJECT_ROOT))
+
+LOCAL_SRC_PACKAGE = "_benchmark_equivalence_local_src"
+LOCAL_SRC_DIR = PROJECT_ROOT / "src"
+
+
+def local_src_module(module_name: str):
+    """Load selected src modules without executing src/__init__.py."""
+    if LOCAL_SRC_PACKAGE not in sys.modules:
+        package = types.ModuleType(LOCAL_SRC_PACKAGE)
+        package.__path__ = [str(LOCAL_SRC_DIR)]
+        sys.modules[LOCAL_SRC_PACKAGE] = package
+
+    full_name = f"{LOCAL_SRC_PACKAGE}.{module_name}"
+    if full_name in sys.modules:
+        return sys.modules[full_name]
+
+    module_path = LOCAL_SRC_DIR / f"{module_name}.py"
+    spec = importlib.util.spec_from_file_location(full_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load local src module: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[full_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def parse_args() -> argparse.Namespace:
@@ -183,10 +209,9 @@ def load_model_bundle(case: dict, device: torch.device) -> dict:
 
 
 def build_original_game(model_bundle: dict, image: Image.Image, text: str, batch_size: int):
-    import src
-
+    game_huggingface = local_src_module("game_huggingface")
     start = perf_counter()
-    old_game = src.game_huggingface.VisionLanguageGame(
+    old_game = game_huggingface.VisionLanguageGame(
         model_bundle["model"],
         model_bundle["processor"],
         input_image=image,
@@ -420,10 +445,9 @@ def run_strategy_comparison(
     input_context: dict,
     output_dir: Path,
 ) -> dict:
-    import src
-
+    utils = local_src_module("utils")
     total_start = perf_counter()
-    src.utils.set_seed(run_config["random_state"])
+    utils.set_seed(run_config["random_state"])
     old_game = input_context["old_game"]
     new_game, imputer, migrated_game_build_runtime_s = build_migrated_game(
         run_config, model_bundle, input_context["image"]
@@ -501,10 +525,9 @@ def run_original_pipeline(
     text_full: str,
     text_source: str,
 ) -> dict:
-    import src
-
+    utils = local_src_module("utils")
     total_start = perf_counter()
-    src.utils.set_seed(run_config["random_state"])
+    utils.set_seed(run_config["random_state"])
     input_context = build_original_context(model_bundle, input_path, text, run_config["batch_size"])
     old_game = input_context["old_game"]
     inputs = build_coalition_inputs(old_game, run_config)

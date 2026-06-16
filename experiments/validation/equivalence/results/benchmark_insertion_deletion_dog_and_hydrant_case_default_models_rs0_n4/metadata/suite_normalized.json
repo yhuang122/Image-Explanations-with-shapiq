@@ -1,0 +1,70 @@
+{
+  "name": null,
+  "run_mode": "compare",
+  "single_text": "dog",
+  "defaults": {
+    "random_state": 0,
+    "num_coalitions": 4,
+    "batch_size": 2,
+    "tolerance": 0.0001,
+    "cuda": true,
+    "use_amp": false
+  },
+  "cases": [
+    {
+      "name": "insertion_deletion"
+    }
+  ],
+  "inputs": [
+    "assets\\dog_and_hydrant.jpg"
+  ],
+  "models": [
+    {}
+  ],
+  "strategies": [
+    {
+      "strategy_name": "patch_crossmodal_mean",
+      "segmenter_strategy": "patch",
+      "masker_strategy": "crossmodal_mean",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "patch_vision_mean",
+      "segmenter_strategy": "patch",
+      "masker_strategy": "vision_mean",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "patch_text_attn",
+      "segmenter_strategy": "patch",
+      "masker_strategy": "text_attn",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "slic_crossmodal_mean",
+      "segmenter_strategy": "slic",
+      "masker_strategy": "crossmodal_mean",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    }
+  ]
+}

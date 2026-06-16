@@ -2,20 +2,23 @@
   "name": "equivalence_strict_mscoco100_clip_b32",
   "defaults": {
     "num_coalitions": 1000,
-    "batch_size": 32,
+    "batch_size": 64,
     "tolerance": 0.0001,
     "cuda": true,
     "use_amp": false
   },
   "cases": [
     "faithfulness",
-    "insertion_deletion"
+    "insertion_deletion",
+    "pointing_game_banzhaf",
+    "pointing_game_shapley",
+    "explain_mscoco",
+    "insertion_deletion_siglip",
+    "pointing_game_crossmodal",
+    "explain_mscoco_siglip"
   ],
   "inputs": [
     "data/input/wds_mscoco_captions_test_100"
-  ],
-  "models": [
-    "clip-vit-b-32"
   ],
   "strategies": [
     {

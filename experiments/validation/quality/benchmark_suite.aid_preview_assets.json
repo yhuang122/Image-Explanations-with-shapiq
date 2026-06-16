@@ -1,0 +1,72 @@
+{
+  "name": "aid_preview_assets",
+  "inputs": [
+    {
+      "path": "assets/dog_and_hydrant.jpg",
+      "text": "dog and hydrant"
+    },
+    {
+      "path": "assets/giraffe_drinking.jpg",
+      "text": "giraffe drinking"
+    }
+  ],
+  "defaults": {
+    "batch_size": 64,
+    "curve_points": 51,
+    "cuda": true,
+    "use_amp": false,
+    "text_column": "first_caption"
+  },
+  "models": [
+    "clip-vit-b-32",
+    "siglip-base-p16-224"
+  ],
+  "strategies": [
+    {
+      "name": "patch_crossmodal_mean",
+      "segmenter": "patch",
+      "masker": "crossmodal_mean"
+    },
+    {
+      "name": "patch_text_attn",
+      "segmenter": "patch",
+      "masker": "text_attn"
+    },
+    {
+      "name": "slic_crossmodal_mean",
+      "segmenter": "slic",
+      "masker": "crossmodal_mean",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      }
+    },
+    {
+      "name": "gradient_guided_crossmodal_mean",
+      "segmenter": "gradient_guided",
+      "masker": "crossmodal_mean",
+      "gradient_guided": {
+        "n_segments": 49
+      }
+    }
+  ],
+  "methods": [
+    {
+      "name": "kernelshap_shapley_order1_preview",
+      "mode": "shapley",
+      "order": 1,
+      "explainer_name": "fixlip",
+      "approximation_type": "original",
+      "budget": 512
+    },
+    {
+      "name": "proxyshap_banzhaf_p05_order2_preview",
+      "mode": "banzhaf/0.5",
+      "order": 2,
+      "explainer_name": "fixlip",
+      "approximation_type": "proxyshap",
+      "budget": 512
+    }
+  ]
+}

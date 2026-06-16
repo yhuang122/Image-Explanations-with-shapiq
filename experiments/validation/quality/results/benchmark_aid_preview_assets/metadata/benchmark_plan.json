@@ -1,0 +1,87 @@
+{
+  "name": "benchmark_aid_preview_assets",
+  "inputs": [
+    {
+      "path": "assets/dog_and_hydrant.jpg",
+      "text": "dog and hydrant"
+    },
+    {
+      "path": "assets/giraffe_drinking.jpg",
+      "text": "giraffe drinking"
+    }
+  ],
+  "input_files": 2,
+  "models": [
+    {
+      "model_preset": "clip-vit-b-32"
+    },
+    {
+      "model_preset": "siglip-base-p16-224"
+    }
+  ],
+  "strategies": [
+    {
+      "strategy_name": "patch_crossmodal_mean",
+      "segmenter_strategy": "patch",
+      "segmenter_params": {},
+      "masker_strategy": "crossmodal_mean",
+      "masker_params": {}
+    },
+    {
+      "strategy_name": "patch_text_attn",
+      "segmenter_strategy": "patch",
+      "segmenter_params": {},
+      "masker_strategy": "text_attn",
+      "masker_params": {}
+    },
+    {
+      "strategy_name": "slic_crossmodal_mean",
+      "segmenter_strategy": "slic",
+      "segmenter_params": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      },
+      "masker_strategy": "crossmodal_mean",
+      "masker_params": {}
+    },
+    {
+      "strategy_name": "gradient_guided_crossmodal_mean",
+      "segmenter_strategy": "gradient_guided",
+      "segmenter_params": {
+        "n_segments": 49
+      },
+      "masker_strategy": "crossmodal_mean",
+      "masker_params": {}
+    }
+  ],
+  "methods": [
+    {
+      "method_name": "kernelshap_shapley_order1_preview",
+      "mode": "shapley",
+      "order": 1,
+      "approximation_type": "original",
+      "budget": 512,
+      "sampler_name": "shapley",
+      "sampler_p": 0.5
+    },
+    {
+      "method_name": "proxyshap_banzhaf_p05_order2_preview",
+      "mode": "banzhaf/0.5",
+      "order": 2,
+      "approximation_type": "proxyshap",
+      "budget": 512,
+      "sampler_name": "banzhaf",
+      "sampler_p": 0.5
+    }
+  ],
+  "defaults": {
+    "batch_size": 64,
+    "curve_points": 51,
+    "cuda": true,
+    "use_amp": false,
+    "random_state": 0,
+    "text_column": "first_caption"
+  },
+  "planned_runs": 32
+}
