@@ -1,0 +1,63 @@
+{
+  "name": "equivalence_insertion_deletion_clip_siglip_strategies_mscoco100",
+  "defaults": {
+    "num_coalitions": 1000,
+    "batch_size": 64,
+    "tolerance": 0.0001,
+    "cuda": true,
+    "use_amp": false
+  },
+  "cases": [
+    "insertion_deletion"
+  ],
+  "inputs": [
+    "data/input/wds_mscoco_captions_test_100"
+  ],
+  "models": [
+    "clip-vit-b-32",
+    "siglip-base-p16-224"
+  ],
+  "strategies": [
+    {
+      "name": "patch_vision_blur",
+      "segmenter": "patch",
+      "masker": "vision_blur"
+    },
+    {
+      "name": "patch_crossmodal_blur",
+      "segmenter": "patch",
+      "masker": "crossmodal_blur"
+    },
+    {
+      "name": "slic_crossmodal_blur",
+      "segmenter": "slic",
+      "masker": "crossmodal_blur",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      }
+    },
+    {
+      "name": "patch_attention",
+      "segmenter": "patch",
+      "masker": "attention"
+    },
+    {
+      "name": "gradient_guided_crossmodal_mean",
+      "segmenter": "gradient_guided",
+      "masker": "crossmodal_mean",
+      "gradient_guided": {
+        "n_segments": 49
+      }
+    },
+    {
+      "name": "gradient_guided_crossmodal_blur",
+      "segmenter": "gradient_guided",
+      "masker": "crossmodal_blur",
+      "gradient_guided": {
+        "n_segments": 49
+      }
+    }
+  ]
+}

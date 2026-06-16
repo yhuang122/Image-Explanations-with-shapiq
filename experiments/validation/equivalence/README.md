@@ -95,6 +95,8 @@ For a single image, pass both image and text explicitly:
 | `benchmark_suite.equivalence_models.json` | `models` | Model coverage for CLIP, SigLIP, and SigLIP2 model presets. | 800 |
 | `benchmark_suite.equivalence_strategies.json` | `strategies` | Migrated strategy coverage plus baseline-deviation comparison. | 800 |
 | `benchmark_suite.equivalence_crossmodal.json` | `crossmodal` | Crossmodal image-text player value-function coverage. | 100 |
+| `benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part1.json` | `strategies` | Insertion-deletion over 100 images for CLIP + SigLIP with the first supported strategy group. | 800 |
+| `benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part2.json` | `strategies` | Insertion-deletion over 100 images for CLIP + SigLIP with the second supported strategy group. | 1200 |
 
 Running all four current presets gives:
 
@@ -107,13 +109,12 @@ full product over 8 cases, 100 images, 6 model presets, and 4 strategies would r
 
 ## Recommended First Check
 
-For a first local check, run the strict suite in dry-run mode:
-
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strict.json --dry-run
-
-Then run the strict suite before moving to the larger model and strategy suites:
+For a first local check, run the strict suite:
 
     python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strict.json
+
+Normal benchmark runs print the planned run summary first, save it under `metadata/`, and then
+start execution. Use `--dry-run` only when you want a preview-only plan without loading models.
 
 This verifies the standard `patch/crossmodal_mean` path before broader model or strategy coverage.
 
@@ -121,23 +122,24 @@ This verifies the standard `patch/crossmodal_mean` path before broader model or 
 
 Strict equivalence:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strict.json --dry-run
     python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strict.json
 
 Model coverage:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_models.json --dry-run
     python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_models.json
 
 Strategy coverage:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strategies.json --dry-run
     python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strategies.json
 
 Crossmodal coverage:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_crossmodal.json --dry-run
     python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_crossmodal.json
+
+Insertion-deletion CLIP + SigLIP strategy coverage:
+
+    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part1.json
+    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part2.json
 
 Interrupted runs resume automatically. Existing valid `csv/*_comparison.csv` files are skipped.
 Use `--force` only when a preset should be recomputed from scratch:
@@ -151,7 +153,7 @@ Important CLI parameters:
 | Parameter | Meaning |
 |---|---|
 | `--config` | JSON preset for batch benchmarks. |
-| `--dry-run` | Print planned runs without loading models. |
+| `--dry-run` | Preview-only mode. Normal runs already print the plan before execution. |
 | `--force` | Recompute existing run CSVs. |
 | `--case` | Single migrated game name. |
 | `--input` | Single image or manifest-backed input folder. |
@@ -161,6 +163,7 @@ Important CLI parameters:
 | `--model-name` | Custom HuggingFace model id. |
 | `--segmenter-strategy` | Explicit segmenter strategy, such as `patch` or `slic`. |
 | `--masker-strategy` | Explicit masker strategy, such as `crossmodal_mean`, `vision_mean`, or `text_attn`. |
+| `--vision-blur-sigma` | Gaussian blur sigma for single-run `vision_blur` and `crossmodal_blur`. JSON suites can use `vision_blur.sigma` or `crossmodal_blur.sigma`. |
 | `--num-coalitions` | Number of sampled coalitions per run. |
 | `--batch-size` | Model batch size for coalition evaluation. |
 | `--tolerance` | Numerical equivalence threshold. |
@@ -175,6 +178,12 @@ from the main preset configs.
 Each preset writes to its own result directory:
 
     experiments/validation/equivalence/results/<suite-name>/
+      metadata/
+        benchmark_plan.json
+        suite_normalized.json
+        cli_args.json
+        environment.json
+        config_used.json
       csv/
         summary.csv
         *_coverage_table.csv
@@ -217,6 +226,10 @@ Models:
 Strategies:
 
     python .\experiments\validation\equivalence\plot_results.py --input .\experiments\validation\equivalence\results\benchmark_equivalence_strategies_mscoco100_clip_b32\csv --mode strategies
+
+Insertion-deletion CLIP + SigLIP strategies, after part1 and part2 have both run:
+
+    python .\experiments\validation\equivalence\plot_results.py --input .\experiments\validation\equivalence\results\benchmark_equivalence_insertion_deletion_clip_siglip_strategies_mscoco100\csv --mode strategies
 
 Crossmodal:
 
@@ -265,7 +278,8 @@ Main outputs:
 - `equivalence_strategies_coverage_table.png`: completed runs, strict-equivalent runs, baseline-comparable runs, and runtime.
 - `equivalence_strategies_baseline_deviation_by_strategy.png`: deviation from baseline only where baseline comparison is meaningful.
 - `equivalence_strategies_migrated_runtime_by_strategy.png`: migrated pipeline runtime by strategy.
-- `equivalence_strategies_runtime_case_heatmap.png`: migrated runtime by case and strategy.
+- `equivalence_strategies_runtime_case_heatmap.png`: migrated runtime by case and strategy for single-model strategy suites.
+- `equivalence_strategies_runtime_model_strategy_heatmap.png`: migrated runtime by model and strategy for multi-model strategy suites.
 
 ### Crossmodal
 

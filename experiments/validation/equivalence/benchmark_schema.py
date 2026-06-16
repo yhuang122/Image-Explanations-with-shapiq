@@ -9,6 +9,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 RESULTS_DIR = PROJECT_ROOT / "experiments" / "validation" / "equivalence" / "results"
 DEFAULT_INPUT_DIR = PROJECT_ROOT / "data" / "input" / "wds_mscoco_captions_test_100"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+CSV_DIRNAME = "csv"
+PLOTS_DIRNAME = "plots"
+PLOT_MODES = ("strict", "models", "strategies", "crossmodal")
 
 MODEL_PRESETS = {
     "clip-vit-b-32": "openai/clip-vit-base-patch32",
@@ -24,8 +27,11 @@ MODEL_PRESET_BY_NAME = {model_name: preset for preset, model_name in MODEL_PRESE
 SEGMENTER_CHOICES = ("patch", "slic", "gradient_guided")
 MASKER_CHOICES = (
     "crossmodal_mean",
+    "crossmodal_blur",
     "vision_mean",
+    "vision_blur",
     "text_attn",
+    "attention",
 )
 
 ORIGINAL_PIPELINE = "src.game_huggingface.VisionLanguageGame"

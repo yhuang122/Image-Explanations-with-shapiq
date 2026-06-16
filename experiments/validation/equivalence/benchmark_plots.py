@@ -8,10 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-
-PLOTS_DIRNAME = "plots"
-CSV_DIRNAME = "csv"
-PLOT_MODES = ("strict", "models", "strategies", "crossmodal")
+from benchmark_schema import CSV_DIRNAME, PLOT_MODES, PLOTS_DIRNAME
 
 
 def parse_report_float(report: dict, field: str):
@@ -180,6 +177,10 @@ def ordered_values(reports: list[dict], field: str) -> list[str]:
         if value not in values:
             values.append(value)
     return values
+
+
+def has_multiple_values(reports: list[dict], field: str) -> bool:
+    return len(ordered_values(reports, field)) > 1
 
 
 def experiment_context(reports: list[dict]) -> str:
@@ -469,9 +470,23 @@ def write_coverage_outputs(
 
 
 def strategy_summary(reports: list[dict]) -> list[dict]:
+    split_by_model = has_multiple_values(reports, "model_preset")
+    keys = []
+    for report in reports:
+        model = str(report.get("model_preset") or "unknown")
+        strategy = str(report.get("strategy_name") or "unknown")
+        key = (model if split_by_model else "", strategy)
+        if key not in keys:
+            keys.append(key)
+
     groups = []
-    for strategy in ordered_values(reports, "strategy_name"):
-        strategy_reports = [report for report in reports if str(report.get("strategy_name") or "unknown") == strategy]
+    for model, strategy in keys:
+        strategy_reports = [
+            report
+            for report in reports
+            if str(report.get("strategy_name") or "unknown") == strategy
+            and (not split_by_model or str(report.get("model_preset") or "unknown") == model)
+        ]
         comparable_reports = [
             report for report in strategy_reports if true_field(report, "coalition_comparison_available")
         ]
@@ -481,7 +496,9 @@ def strategy_summary(reports: list[dict]) -> list[dict]:
         migrated_runtime = [value for value in migrated_runtime if value is not None]
         groups.append(
             {
-                "group": strategy,
+                "group": f"{model} / {strategy}" if split_by_model else strategy,
+                "model": model if split_by_model else "",
+                "strategy": strategy,
                 "runs": len(strategy_reports),
                 "completed": len(strategy_reports),
                 "strict_equivalent": sum(true_field(report, "strict_equivalence") for report in strategy_reports),
@@ -498,8 +515,8 @@ def strategy_summary(reports: list[dict]) -> list[dict]:
 
 
 def write_strategy_table(csv_dir: Path, plots_dir: Path, groups: list[dict], title: str) -> dict:
-    headers = [
-        "Strategy",
+    split_by_model = any(group.get("model") for group in groups)
+    metric_headers = [
         "Runs",
         "Completed",
         "Strict-equivalent runs",
@@ -507,9 +524,10 @@ def write_strategy_table(csv_dir: Path, plots_dir: Path, groups: list[dict], tit
         "Max baseline deviation",
         "Migrated runtime (s)",
     ]
-    rows = [
-        [
-            display_label(group["group"], 48),
+    headers = ["Model", "Strategy", *metric_headers] if split_by_model else ["Strategy", *metric_headers]
+    rows = []
+    for group in groups:
+        metrics = [
             group["runs"],
             group["completed"],
             group["strict_equivalent"],
@@ -517,17 +535,24 @@ def write_strategy_table(csv_dir: Path, plots_dir: Path, groups: list[dict], tit
             "N/A" if group["baseline_deviation"] is None else f"{group['baseline_deviation']:.3g}",
             f"{group['migrated_runtime']:.2f}s",
         ]
-        for group in groups
-    ]
+        if split_by_model:
+            rows.append([display_label(group["model"], 24), display_label(group["strategy"], 44), *metrics])
+        else:
+            rows.append([display_label(group["strategy"], 48), *metrics])
     csv_path = csv_dir / "equivalence_strategies_coverage_table.csv"
     image_path = plots_dir / "equivalence_strategies_coverage_table.png"
     write_table_csv(csv_path, headers, rows)
+    col_widths = (
+        [0.13, 0.21, 0.07, 0.09, 0.15, 0.16, 0.10, 0.09]
+        if split_by_model
+        else [0.22, 0.08, 0.10, 0.15, 0.17, 0.14, 0.14]
+    )
     write_table_image(
         image_path,
         title,
         headers,
         rows,
-        col_widths=[0.22, 0.08, 0.10, 0.15, 0.17, 0.14, 0.14],
+        col_widths=col_widths,
     )
     return {
         "equivalence_strategies_coverage_csv": str(csv_path),
@@ -633,6 +658,7 @@ def strategies_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dic
     outputs = {}
     groups = strategy_summary(reports)
     context = experiment_context(reports)
+    split_by_model = has_multiple_values(reports, "model_preset")
     outputs.update(write_strategy_table(csv_dir, plots_dir, groups, f"Strategy equivalence coverage summary\n{context}"))
     write_single_runtime_plot(
         plots_dir / "equivalence_strategies_migrated_runtime_by_strategy.png",
@@ -644,13 +670,20 @@ def strategies_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dic
         groups,
         f"Baseline output deviation for comparable strategies\n{context}",
     )
-    rows, cols, matrix = group_mean(reports, "case", "strategy_name", "migrated_pipeline_runtime_s")
+    heatmap_row_field = "model_preset" if split_by_model else "case"
+    heatmap_title_axis = "model and strategy" if split_by_model else "case and strategy"
+    heatmap_path = (
+        plots_dir / "equivalence_strategies_runtime_model_strategy_heatmap.png"
+        if split_by_model
+        else plots_dir / "equivalence_strategies_runtime_case_heatmap.png"
+    )
+    rows, cols, matrix = group_mean(reports, heatmap_row_field, "strategy_name", "migrated_pipeline_runtime_s")
     write_heatmap(
-        plots_dir / "equivalence_strategies_runtime_case_heatmap.png",
+        heatmap_path,
         rows,
         cols,
         matrix,
-        f"Mean runtime by case and strategy\n{context}",
+        f"Mean runtime by {heatmap_title_axis}\n{context}",
         "mean runtime (s)",
     )
     outputs.update(
@@ -661,9 +694,7 @@ def strategies_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dic
             "equivalence_strategies_baseline_deviation_by_strategy": str(
                 plots_dir / "equivalence_strategies_baseline_deviation_by_strategy.png"
             ),
-            "equivalence_strategies_runtime_case_heatmap": str(
-                plots_dir / "equivalence_strategies_runtime_case_heatmap.png"
-            ),
+            "equivalence_strategies_runtime_heatmap": str(heatmap_path),
         }
     )
     return outputs

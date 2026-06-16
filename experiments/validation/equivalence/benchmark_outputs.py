@@ -5,7 +5,11 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import platform
+import shutil
+import sys
 from dataclasses import asdict
+from importlib import metadata
 from pathlib import Path
 
 import numpy as np
@@ -13,18 +17,22 @@ import numpy as np
 from benchmark_schema import (
     BENCHMARK_SUMMARY_FIELDS,
     COMPARISON_SCOPE_FIELDS,
+    CSV_DIRNAME,
+    PROJECT_ROOT,
     RESULTS_DIR,
     ROW_FIELDS,
     SUMMARY_FIELDS,
     slug,
 )
-from benchmark_plots import CSV_DIRNAME, PLOT_MODES, PLOTS_DIRNAME, write_benchmark_plots
 
 
 RUNS_DIRNAME = CSV_DIRNAME
+METADATA_DIRNAME = "metadata"
 
 
 def active_params(config) -> dict:
+    if config.strategy == "crossmodal_blur":
+        return {"sigma": config.vision_blur.sigma}
     params = config.active_params
     return asdict(params) if params is not None else {}
 
@@ -101,6 +109,99 @@ def run_name(case: dict) -> str:
 
 def suite_output_dir(name: str) -> Path:
     return RESULTS_DIR / name
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+    tmp_path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    tmp_path.replace(path)
+
+
+def package_version(package_name: str) -> str | None:
+    try:
+        return metadata.version(package_name)
+    except metadata.PackageNotFoundError:
+        return None
+
+
+def torch_environment() -> dict:
+    return {
+        "available": package_version("torch") is not None,
+        "version": package_version("torch"),
+        "cuda_runtime_checked": False,
+        "note": "CUDA availability is checked by the benchmark runner when --cuda is used.",
+    }
+
+
+def package_contains_module(package_name: str, module_name: str) -> bool:
+    try:
+        files = metadata.distribution(package_name).files or []
+    except metadata.PackageNotFoundError:
+        return False
+
+    module_prefix = module_name.replace(".", "/")
+    module_file = f"{module_prefix}.py"
+    module_init = f"{module_prefix}/__init__.py"
+    normalized_files = [str(file).replace("\\", "/") for file in files]
+    return module_file in normalized_files or module_init in normalized_files
+
+
+def shapiq_tree_status() -> dict:
+    return {
+        "version": package_version("shapiq"),
+        "module_files_present": package_contains_module("shapiq", "shapiq.tree"),
+        "import_checked": False,
+    }
+
+
+def environment_info() -> dict:
+    packages = ("torch", "transformers", "shapiq", "numpy", "pandas", "Pillow", "scikit-learn")
+    return {
+        "python": {
+            "version": sys.version,
+            "executable": sys.executable,
+        },
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "platform": platform.platform(),
+        },
+        "packages": {package: package_version(package) for package in packages},
+        "torch": torch_environment(),
+        "preflight": {
+            "shapiq_tree": shapiq_tree_status(),
+        },
+    }
+
+
+def config_path_from_args(args) -> Path | None:
+    if not getattr(args, "config", None):
+        return None
+    path = Path(args.config)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def write_run_metadata(output_dir: Path, args, suite: dict, plan: dict) -> dict:
+    metadata_dir = output_dir / METADATA_DIRNAME
+    paths = {
+        "benchmark_plan": metadata_dir / "benchmark_plan.json",
+        "suite_normalized": metadata_dir / "suite_normalized.json",
+        "cli_args": metadata_dir / "cli_args.json",
+        "environment": metadata_dir / "environment.json",
+    }
+    write_json(paths["benchmark_plan"], plan)
+    write_json(paths["suite_normalized"], suite)
+    write_json(paths["cli_args"], vars(args))
+    write_json(paths["environment"], environment_info())
+
+    config_path = config_path_from_args(args)
+    if config_path is not None:
+        paths["config_used"] = metadata_dir / "config_used.json"
+        shutil.copyfile(config_path, paths["config_used"])
+
+    return {key: str(path) for key, path in paths.items()}
 
 
 def comparison_csv_path(output_dir: Path, case: dict) -> Path:
@@ -293,6 +394,8 @@ def write_benchmark_summary(output_dir: Path, reports: list[dict], plot_mode: st
 
     result_paths = {"summary_csv": str(summary_path)}
     if plot_mode is not None:
+        from benchmark_plots import write_benchmark_plots
+
         result_paths.update(write_benchmark_plots(output_dir, reports, plot_mode))
     return result_paths
 

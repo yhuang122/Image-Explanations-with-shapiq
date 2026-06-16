@@ -25,6 +25,7 @@ from benchmark_schema import (
 DEFAULT_RANDOM_STATE = 0
 REQUIRED_DEFAULTS = ("num_coalitions", "batch_size")
 MANIFEST_FILENAME = "manifest.csv"
+DEFAULT_VISION_BLUR_SIGMA = 3.0
 
 
 def resolve_project_path(path_value: str) -> Path:
@@ -201,6 +202,8 @@ def normalize_strategy(strategy: dict) -> dict:
 
     slic = strategy.get("slic", {})
     gradient_guided = strategy.get("gradient_guided", {})
+    vision_blur = strategy.get("vision_blur", {})
+    crossmodal_blur = strategy.get("crossmodal_blur", vision_blur)
     gradient_guided_n_segments = gradient_guided.get("n_segments")
     return {
         "strategy_name": strategy.get("name") or f"{segmenter}_{masker}",
@@ -212,6 +215,8 @@ def normalize_strategy(strategy: dict) -> dict:
         "gradient_guided_n_segments": (
             None if gradient_guided_n_segments is None else int(gradient_guided_n_segments)
         ),
+        "vision_blur_sigma": float(vision_blur.get("sigma", DEFAULT_VISION_BLUR_SIGMA)),
+        "crossmodal_blur_sigma": float(crossmodal_blur.get("sigma", DEFAULT_VISION_BLUR_SIGMA)),
     }
 
 
@@ -229,6 +234,8 @@ def resolve_strategy_specs(args: argparse.Namespace) -> list[dict]:
                 "slic_compactness": args.slic_compactness,
                 "slic_sigma": args.slic_sigma,
                 "gradient_guided_n_segments": args.gradient_guided_n_segments,
+                "vision_blur_sigma": args.vision_blur_sigma,
+                "crossmodal_blur_sigma": args.vision_blur_sigma,
             }
         ]
 
@@ -241,6 +248,8 @@ def resolve_strategy_specs(args: argparse.Namespace) -> list[dict]:
                 "slic_compactness": args.slic_compactness,
                 "slic_sigma": args.slic_sigma,
                 "gradient_guided_n_segments": args.gradient_guided_n_segments,
+                "vision_blur_sigma": args.vision_blur_sigma,
+                "crossmodal_blur_sigma": args.vision_blur_sigma,
             }
         )
     return specs
@@ -348,13 +357,35 @@ def describe_suite(suite: dict) -> dict:
         "input_files": len(samples),
         "models": suite["models"],
         "strategies": [] if suite["run_mode"] == "original" else [
-            {
-                "strategy_name": spec["strategy_name"],
-                "segmenter_strategy": spec["segmenter_strategy"],
-                "masker_strategy": spec["masker_strategy"],
-            }
+            strategy_plan(spec)
             for spec in suite["strategies"]
         ],
         "defaults": suite["defaults"],
         "planned_runs": len(suite["cases"]) * len(samples) * len(suite["models"]) * strategy_count,
+    }
+
+
+def strategy_plan(strategy_spec: dict) -> dict:
+    segmenter_params = {}
+    if strategy_spec["segmenter_strategy"] == "slic":
+        segmenter_params = {
+            "n_segments": strategy_spec["slic_n_segments"],
+            "compactness": strategy_spec["slic_compactness"],
+            "sigma": strategy_spec["slic_sigma"],
+        }
+    elif strategy_spec["segmenter_strategy"] == "gradient_guided":
+        segmenter_params = {"n_segments": strategy_spec["gradient_guided_n_segments"]}
+
+    masker_params = {}
+    if strategy_spec["masker_strategy"] == "vision_blur":
+        masker_params = {"sigma": strategy_spec["vision_blur_sigma"]}
+    elif strategy_spec["masker_strategy"] == "crossmodal_blur":
+        masker_params = {"sigma": strategy_spec["crossmodal_blur_sigma"]}
+
+    return {
+        "strategy_name": strategy_spec["strategy_name"],
+        "segmenter_strategy": strategy_spec["segmenter_strategy"],
+        "segmenter_params": segmenter_params,
+        "masker_strategy": strategy_spec["masker_strategy"],
+        "masker_params": masker_params,
     }
