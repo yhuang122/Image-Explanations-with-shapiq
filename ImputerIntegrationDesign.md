@@ -9,20 +9,20 @@ explanation via Shapley interactions.
 
 ```
                          ┌──────────────────┐
-                         │ VisionImputerFactory │  ← model introspection,
+                         │VisionImputerFactory│  ← model introspection,
                          └────────┬─────────┘     config assembly
                                   │
                   ┌───────────────┼───────────────┐
                   ▼               ▼               ▼
           ┌──────────┐   ┌──────────────┐   ┌──────────────┐
-          │ Segmenter │   │    Masker    │   │ ProcessorOutput │
-          │ (spatial)  │   │ (occlusion)  │   │ (model inputs)  │
+          │ Segmenter│   │    Masker    │   │ProcessorOutput│
+          │ (spatial)│   │ (occlusion)  │   │(preprocessing)│
           └──────────┘   └──────────────┘   └──────────────┘
                   │               │               │
                   ▼               ▼               ▼
           ┌──────────────────────────────────────────┐
-          │            VisionImputer                  │
-          │   coalitions → masks → forward → values   │
+          │            VisionImputer                 │
+          │   coalitions → masks → forward → values  │
           └──────────────────┬───────────────────────┘
                              │
                              ▼

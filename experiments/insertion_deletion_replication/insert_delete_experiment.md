@@ -74,7 +74,8 @@ Output: `results/openai/clip-vit-base-patch16/mscoco_aid_fixlip_0_1000.npy` and 
 
 ## Plot results
 
-uv run python experiments/insertion_deletion_replication/plot_insertion_deletion.py \
+conda activate shapiq_demo
+python experiments/insertion_deletion_replication/plot_insertion_deletion.py \
     --path mscoco_aid_fixlip_0_1000.npy \
     --out insertion_deletion.png
 ```

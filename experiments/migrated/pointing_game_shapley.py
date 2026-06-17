@@ -37,8 +37,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 import src
-from ImputerFactory import ImageImputerFactory
-from Game import VisionLanguageGame
+from shapiq.imputer.vision import VisionImputerFactory
+from shapiq.imputer.vision import VisionLanguageGame
 src.utils.set_seed(RANDOM_STATE)
 
 import wandb
@@ -51,7 +51,7 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
     model.to(DEVICE)
     processor = CLIPProcessor.from_pretrained(MODEL_NAME)
     input_text = CLASS_LABELS.replace("_", " ")
-    factory = ImageImputerFactory()
+    factory = VisionImputerFactory()
 
     for i in range(50):
         input_image = Image.open(os.path.join(PATH_INPUT, f'{i}.jpg'))

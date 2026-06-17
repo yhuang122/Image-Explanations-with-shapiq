@@ -44,8 +44,8 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 import src
-from ImputerFactory import ImageImputerFactory
-from Game import VisionLanguageGame
+from shapiq.imputer.vision import VisionImputerFactory
+from shapiq.imputer.vision import VisionLanguageGame
 
 start_time = time.time()
 
@@ -70,7 +70,7 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=arg
 
     model_openai, processor_openai = clip.load("ViT-B/32" if MODEL_NAME.endswith("32") else "ViT-B/16", device=1)
 
-    factory = ImageImputerFactory()
+    factory = VisionImputerFactory()
 
     n_iter = 0
     for i, d in enumerate(dataset):

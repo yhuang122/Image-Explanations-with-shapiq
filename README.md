@@ -6,32 +6,26 @@ Pluggable Segmenters (patch, SLIC, gradient-guided) × Maskers (mean, blur, atte
 
 ## Environment Setup
 
-### Option A: uv (recommended)
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync
-source .venv/bin/activate
-uv pip install "git+https://github.com/yhuang122/Image-Explanations-with-shapiq.git@shapiq_dev"
-```
-
-### Option B: conda (for experiment reproduction)
+### conda
 
 ```bash
 conda env create -f environment.yml
 conda activate shapiq_demo
 ```
 
-Legacy conda env (upstream shapiq, for reference): `../fixlip/env_faster.yml`.
+This creates a self-contained environment with all dependencies (PyTorch 2.4.1 + CUDA 11.8,
+Transformers 4.51.3, modular shapiq, scikit-image, etc.).
+
+> **Note on reproducibility**: The conda-forge binary of PyTorch differs from the PyPI wheel
+> (different cuDNN versions, C++ ABI, and CUDA library bundles).  If you observe tiny
+> floating-point differences between runs in different environments, this is expected —
+> see the Reproducibility Note below.
 
 ---
 
 ## Quick Start
 
 ```python
-import sys
-sys.path.insert(0, ".")
-
 from shapiq.imputer.vision import VisionImputerFactory, VisionLanguageGame
 
 factory = VisionImputerFactory()
@@ -134,17 +128,16 @@ Example Shapley-interaction explanations on real images.
 
 ---
 
-### 5. Equivalence — New API vs Legacy
+### Reproducibility Note
 
-Numerical equivalence between `shapiq.imputer.vision` and the archived `ImputerFactory`.
+`example_siglip_updated.ipynb` interaction values are sensitive to the
+PyTorch build.  `conda-forge` and `pip` distribute different binaries of
+the same version (`2.4.1`) — they differ in compilation flags, BLAS/LAPACK
+backends, and cuDNN bindings.  These produce tiny floating-point
+differences in model forward passes (< 1e-6 per coalition), which
+**XGBoost proxyshap** amplifies through tree-split decisions.
 
-| Script | `experiments/migrated/test_game_equivalence.py`, `compare_games.py` |
-|---|---|
-
-| Metric | Tolerance | Pass? |
-|---|---|---|
-| `forward_1d` output | Δ < 1e-4 | — |
-| `forward_crossmodal` output | Δ < 1e-4 | — |
+→ Always use the conda environment above to reproduce the reported numbers.
 
 ---
 
@@ -152,7 +145,6 @@ Numerical equivalence between `shapiq.imputer.vision` and the archived `ImputerF
 
 ### `example.ipynb`
 CLIP ViT-B/32 + PatchSegmenter + CrossModalMeanMasker — full pipeline.
-**Verified**: migrated pipeline produces identical results to the original fixlip implementation.
 
 ![example_fixlip](data/report_pictures/example_fixlip.png)
 
@@ -165,8 +157,8 @@ VisionBlurMasker — Gaussian blur occlusion (CPU skimage).
 ### `example_gradient_guided.ipynb`
 GradientGuidedSegmenter — saliency-guided non-uniform layout.
 
-### `example_siglip.ipynb`
-SigLIP model support.
+### `example_siglip_updated.ipynb`
+SigLIP model support — see Reproducibility Note above.
 
 ### `example_faster.ipynb`
 Batch-size tuning and performance profiling.

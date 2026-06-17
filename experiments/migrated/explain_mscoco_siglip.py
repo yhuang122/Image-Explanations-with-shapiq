@@ -44,8 +44,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 import src
-from ImputerFactory import ImageImputerFactory
-from Game import VisionLanguageGame
+from shapiq.imputer.vision import VisionImputerFactory
+from shapiq.imputer.vision import VisionLanguageGame
 src.utils.set_seed(RANDOM_STATE)
 
 import wandb
@@ -57,7 +57,7 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/explain', config=args) as run:
     model = AutoModel.from_pretrained(MODEL_NAME)
     model.to(DEVICE)
     processor = AutoProcessor.from_pretrained(MODEL_NAME)
-    factory = ImageImputerFactory()
+    factory = VisionImputerFactory()
 
     dataset = datasets.load_dataset(
         "clip-benchmark/wds_mscoco_captions",

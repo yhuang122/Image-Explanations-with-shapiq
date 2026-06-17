@@ -179,10 +179,10 @@ def write_paper_style_plot(
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from ImputerFactory.plot import plot_image_and_text_together
+    from src.plot import plot_slicimage_and_text_together
 
     n_image = parse_int(row, "n_players_image")
-    fig = plot_image_and_text_together(
+    fig = plot_slicimage_and_text_together(
         img=image_array,
         text=tokens,
         image_players=list(range(n_image)),

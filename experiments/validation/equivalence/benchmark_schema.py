@@ -35,7 +35,7 @@ MASKER_CHOICES = (
 )
 
 ORIGINAL_PIPELINE = "src.game_huggingface.VisionLanguageGame"
-MIGRATED_PIPELINE = "ImageImputerFactory + Game.VisionLanguageGame"
+MIGRATED_PIPELINE = "VisionImputerFactory + VisionLanguageGame"
 
 DEFAULT_STRATEGY_SPECS = (
     {

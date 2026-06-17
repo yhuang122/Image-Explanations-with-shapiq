@@ -158,7 +158,7 @@ def load_model_bundle(model_case: dict[str, Any], device) -> dict[str, Any]:
 
 
 def build_segmenter_config(strategy: dict[str, Any]):
-    from ImputerFactory import GradientGuidedParams, SegmenterConfig, SlicParams
+    from shapiq.imputer.vision import GradientGuidedParams, SegmenterConfig, SlicParams
 
     return SegmenterConfig(
         strategy=strategy["segmenter_strategy"],
@@ -172,7 +172,7 @@ def build_segmenter_config(strategy: dict[str, Any]):
 
 
 def build_masker_config(strategy: dict[str, Any]):
-    from ImputerFactory import MaskerConfig
+    from shapiq.imputer.vision import MaskerConfig
 
     config = MaskerConfig(strategy=strategy["masker_strategy"])
     if strategy["masker_strategy"] == "crossmodal_blur":
@@ -189,12 +189,12 @@ def build_game(
     batch_size: int,
     use_amp: bool,
 ):
-    from Game import VisionLanguageGame
-    from ImputerFactory import ImageImputerFactory
+    from shapiq.imputer.vision import VisionLanguageGame
+    from shapiq.imputer.vision import VisionImputerFactory
 
     start = perf_counter()
     image = Image.open(sample.path).convert("RGB")
-    imputer = ImageImputerFactory().build(
+    imputer = VisionImputerFactory().build(
         model_bundle["model"],
         model_bundle["processor"],
         image,

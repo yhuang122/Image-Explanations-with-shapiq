@@ -26,8 +26,8 @@ from transformers import AutoModel, AutoProcessor
 from PIL import Image
 
 import src
-from ImputerFactory import ImageImputerFactory
-from Game import VisionLanguageGame as NewGame
+from shapiq.imputer.vision import VisionImputerFactory
+from shapiq.imputer.vision import VisionLanguageGame as NewGame
 from src.game_huggingface import VisionLanguageGame as OldGame
 
 np.random.seed(args.seed)
@@ -42,7 +42,7 @@ image = Image.fromarray(np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8)
 text = "a cat sitting on a mat"
 
 # ── build both games ──────────────────────────────────────────────────────────
-factory = ImageImputerFactory()
+factory = VisionImputerFactory()
 imputer = factory.build(model, processor, image, text)
 new_game = NewGame(imputer, batch_size=16)
 

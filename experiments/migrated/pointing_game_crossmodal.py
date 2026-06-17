@@ -39,8 +39,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 import src
-from ImputerFactory import ImageImputerFactory
-from Game import VisionLanguageGame
+from shapiq.imputer.vision import VisionImputerFactory
+from shapiq.imputer.vision import VisionLanguageGame
 src.utils.set_seed(RANDOM_STATE)
 
 import wandb
@@ -57,7 +57,7 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
         processor = CLIPProcessor.from_pretrained(MODEL_NAME)
     model.to(DEVICE)
     input_text = CLASS_LABELS.replace("_", " ")
-    factory = ImageImputerFactory()
+    factory = VisionImputerFactory()
 
     for i in range(50):
         if "siglip2" not in MODEL_NAME and "siglip" in MODEL_NAME and "husky" in input_text:

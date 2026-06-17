@@ -13,6 +13,7 @@ dependencies:
   - transformers=4.51.3
   - opencv
   - scikit-image
+  - scipy
   - ftfy
   - tqdm
   - regex
@@ -26,6 +27,6 @@ dependencies:
   - pip
   - pip:
     - git+https://github.com/openai/clip.git
-    - git+https://github.com/yhuang122/Image-Explanations-with-shapiq.git@shapiq_dev
     - sentencepiece==0.2.0
     - scikit-learn
+    - git+https://github.com/yhuang122/Image-Explanations-with-shapiq.git@shapiq_dev

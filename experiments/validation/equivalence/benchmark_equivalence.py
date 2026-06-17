@@ -50,7 +50,7 @@ from benchmark_suite import (
 if TYPE_CHECKING:
     import torch
 
-    from ImputerFactory import MaskerConfig, SegmenterConfig
+    from shapiq.imputer.vision import MaskerConfig, SegmenterConfig
 
 
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -169,7 +169,7 @@ def generate_coalitions(n_players: int, num_coalitions: int, random_state: int) 
 
 
 def build_segmenter_config(strategy_spec: dict) -> SegmenterConfig:
-    from ImputerFactory import GradientGuidedParams, SegmenterConfig, SlicParams
+    from shapiq.imputer.vision import GradientGuidedParams, SegmenterConfig, SlicParams
 
     return SegmenterConfig(
         strategy=strategy_spec["segmenter_strategy"],
@@ -183,7 +183,7 @@ def build_segmenter_config(strategy_spec: dict) -> SegmenterConfig:
 
 
 def build_masker_config(strategy_spec: dict) -> MaskerConfig:
-    from ImputerFactory import MaskerConfig
+    from shapiq.imputer.vision import MaskerConfig
 
     config = MaskerConfig(strategy=strategy_spec["masker_strategy"])
     if strategy_spec["masker_strategy"] == "crossmodal_blur" and "crossmodal_blur_sigma" in strategy_spec:
@@ -222,11 +222,11 @@ def build_original_game(model_bundle: dict, image: Image.Image, text: str, batch
 
 
 def build_migrated_game(case: dict, model_bundle: dict, image: Image.Image):
-    from Game import VisionLanguageGame
-    from ImputerFactory import ImageImputerFactory
+    from shapiq.imputer.vision import VisionLanguageGame
+    from shapiq.imputer.vision import VisionImputerFactory
 
     start = perf_counter()
-    imputer = ImageImputerFactory().build(
+    imputer = VisionImputerFactory().build(
         model_bundle["model"],
         model_bundle["processor"],
         image,

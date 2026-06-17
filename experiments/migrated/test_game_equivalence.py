@@ -23,8 +23,8 @@ from transformers import AutoModel, AutoProcessor
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from ImputerFactory import ImageImputerFactory
-from Game import VisionLanguageGame as NewGame
+from shapiq.imputer.vision import VisionImputerFactory
+from shapiq.imputer.vision import VisionLanguageGame as NewGame
 from src.game_huggingface import VisionLanguageGame as OldGame
 
 
@@ -83,7 +83,7 @@ def games(model_and_processor, sample_inputs):
     model, processor = model_and_processor
     image, text = sample_inputs
 
-    imputer = ImageImputerFactory().build(model, processor, image, text)
+    imputer = VisionImputerFactory().build(model, processor, image, text)
     new_game = NewGame(imputer, batch_size=16)
     old_game = OldGame(model, processor, image, text, batch_size=16)
 
