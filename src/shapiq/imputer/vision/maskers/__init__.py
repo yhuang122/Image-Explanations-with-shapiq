@@ -36,6 +36,7 @@ def get_masker(name: str) -> type[Masker]:
 
 
 __all__ = [
+    "AttentionMasker",
     "CrossModalBlurMasker",
     "CrossModalMeanMasker",
     "TextAttentionMasker",
@@ -49,6 +50,7 @@ __all__ = [
 
 
 # Built-in maskers — imported for registration side effects
+from .attention import AttentionMasker  # noqa: E402
 from .crossmodal_blur import CrossModalBlurMasker  # noqa: E402
 from .crossmodal_mean import CrossModalMeanMasker  # noqa: E402
 from .text_attention import TextAttentionMasker  # noqa: E402

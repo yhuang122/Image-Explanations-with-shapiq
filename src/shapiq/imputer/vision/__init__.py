@@ -18,6 +18,7 @@ from .factory import VisionImputerFactory
 from .game import VisionLanguageGame
 from .imputer import VisionImputer
 from .maskers import (
+    AttentionMasker,
     CrossModalBlurMasker,
     CrossModalMeanMasker,
     TextAttentionMasker,
@@ -33,9 +34,10 @@ from .maskers.base import (
     VisionBlurParams,
     VisionMeanParams,
 )
-from .segmenters import CustomSegmenter, PatchSegmenter
+from .segmenters import CustomSegmenter, GradientGuidedSegmenter, PatchSegmenter
 from .segmenters.base import (
     CustomSegmenterParams,
+    GradientGuidedParams,
     PatchParams,
     Segmenter,
     SegmenterConfig,
@@ -52,6 +54,7 @@ __all__ = [
     "MaskerConfig",
     "PatchParams",
     "SlicParams",
+    "GradientGuidedParams",
     "CrossModalMeanParams",
     "CrossModalBlurParams",
     "VisionMeanParams",
@@ -62,10 +65,12 @@ __all__ = [
     "ProcessorOutput",
     "PatchSegmenter",
     "CustomSegmenter",
+    "GradientGuidedSegmenter",
     "CustomSegmenterParams",
     "VisionMeanMasker",
     "VisionBlurMasker",
     "TextAttentionMasker",
+    "AttentionMasker",
     "CrossModalMeanMasker",
     "CrossModalBlurMasker",
 ]
