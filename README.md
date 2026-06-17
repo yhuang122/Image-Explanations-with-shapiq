@@ -1,178 +1,164 @@
-<div align="center">
-  
-# FIxLIP [NeurIPS 2025] 
+# Pluggable Image Imputer for shapiq — Demo
 
-[![arXiv](http://img.shields.io/badge/Paper-arxiv.2508.05430-FF6B6B.svg)](https://arxiv.org/abs/2508.05430)
-[![Conference](http://img.shields.io/badge/NeurIPS-2025-FFD93D.svg)](https://neurips.cc/Conferences/2025)
-</div>
+Modular vision-language model explanation pipeline built on **shapiq** + **fixlip**.
+Pluggable Segmenters (patch, SLIC, gradient-guided) × Maskers (mean, blur, attention)
+→ Shapley-interaction explanations for CLIP / SigLIP.
 
-This repository is a code supplement to the following [paper](https://openreview.net/forum?id=on22Rx5A4F):
-
-> H. Baniecki, M. Muschalik, F. Fumagalli, B. Hammer, E. Hüllermeier, P. Biecek. **Explaining Similarity in Vision-Language Encoders with Weighted Banzhaf Interactions**. *NeurIPS 2025*
-
-**TL;DR:** We introduce faithful interaction explanations of CLIP and SigLIP models (FIxLIP), offering a unique, game-theoretic perspective on interpreting image–text similarity predictions.
-
-**New!** For a faster and more reliable computation, check out our new implementation in [`example_faster.ipynb`](/example_faster.ipynb).
-
-[![](assets/poster.png)](assets/poster.pdf)
-
-## Setup
-
-The original environment for reproducibility:
-
-```bash
-conda env create -f env.yml
-conda activate fixlip
-```
-
-The new environment with the updated [`shapiq`](https://github.com/mmschlk/shapiq) package allowing faster computation:
-
-```bash
-conda env create -f env_faster.yml
-conda activate fixlip_faster
-```
-
-## Getting started
-
-Check out the demo for explaining CLIP with FIxLIP in [`example.ipynb`](/example.ipynb).
+## Quick Start
 
 ```python
-import src
-import torch
-from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
-# load model
-model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-model.to('cuda')
-processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-# load data
-input_text = "black dog next to a yellow hydrant"
-input_image = Image.open("assets/dog_and_hydrant.png")
-# define game
-game = src.game_huggingface.VisionLanguageGame(
-    model=model,
-    processor=processor,
-    input_image=input_image,
-    input_text=input_text,
-    batch_size=64
-)
-# define approximator
-fixlip = src.fixlip.FIxLIP(
-    n_players_text=game.n_players_text,
-    n_players_image=game.n_players_image, 
-    max_order=2,
-    p=0.5, # weight
-    mode="banzhaf",
-    random_state=0
-)
-# compute explanation
-interaction_values = fixlip.approximate_crossmodal(
-    game=game, 
-    budget_text=2**6
-    budget_image=2**13,
-)
-print(interaction_values)
-# visualize explanation
-text_tokens, input_image_denormalized = ...
-src.plot.plot_image_and_text_together(
-    iv=interaction_values,
-    text=text_tokens,
-    img=input_image_denormalized,
-    image_players=list(range(game.n_players_image)),
-    plot_interactions=True,
-    ...
-)
+from shapiq.imputer.vision import VisionImputerFactory, VisionLanguageGame
+
+factory = VisionImputerFactory()
+imputer = factory.build(model, processor, image, text)          # defaults: Patch + CrossModalMean
+# imputer = factory.build(model, processor, image, text,
+#                         segmenter_config=SegmenterConfig(strategy="slic"),
+#                         masker_config=MaskerConfig(strategy="vision_blur"))
+game = VisionLanguageGame(imputer, batch_size=64)
+# game is now usable with any shapiq approximator (KernelSHAP, SVARM-I, etc.)
 ```
 
-[![](assets/figure1.png)](https://openreview.net/forum?id=on22Rx5A4F)
+See notebooks below for end-to-end examples.
 
+---
 
-## Faster and more reliable FIxLIP approximation
+## Experiment Results
 
-Check out the demo for explaining CLIP with FIxLIP via ProxySHAP in [`example_faster.ipynb`](/example_faster.ipynb).
+### 1. Faithfulness
 
-```python
-import src
-import torch
-from PIL import Image
-from transformers import AutoProcessor, AutoModel
-# load model
-model = AutoModel.from_pretrained("google/siglip2-base-patch32-256")
-model.to('cuda')
-processor = AutoProcessor.from_pretrained("google/siglip2-base-patch32-256")
-# load data
-input_text = "a giraffe drinking water from a river"
-input_image = Image.open("assets/giraffe_drinking.jpg")
-# define game
-game = src.game_huggingface.VisionLanguageGame(
-    model=model,
-    processor=processor,
-    input_image=input_image,
-    input_text=input_text,
-    batch_size=64
-)
-# define approximator
-fixlip = src.fixlip.FIxLIP(
-    n_players_text=game.n_players_text, 
-    n_players_image=game.n_players_image,
-    random_state=0
-)
-# compute explanation
-interaction_values = fixlip.approximate_crossmodal(
-    game=game, 
-    budget_text=2**5,
-    budget_image=2**13,
-    approximation_type="proxyshap" # new!
-)
-print(interaction_values)
-# visualize explanation
-text_tokens, input_image_denormalized = ...
-clique = {77, 78, 91, 105, 197, 198}
-_ = src.plot.plot_interaction_subset(
-    iv=interaction_values,
-    clique=clique,
-    image_players=list(range(game.n_players_image)),
-    img=input_image_denormalized,
-    text=text_tokens,
-    ...
-)
-```
+How well do Shapley-interaction explanations predict the model's output under coalition
+occlusion?
 
-[![](assets/figure_poster.png)](https://openreview.net/forum?id=on22Rx5A4F)
+| Script | `experiments/migrated/faithfulness.py` |
+|---|---|
+| Models | CLIP ViT-B/32, ViT-B/16, ViT-L/14; SigLIP |
 
-## Running experiments
+| Model | Segmenter | Masker | Pearson r | Spearman ρ | MSE |
+|---|---:|---:|---:|---:|---:|
+| CLIP ViT-B/32 | patch | crossmodal_mean | — | — | — |
 
-* `src` - main code base with the FIxLIP implementation
-* `data` - code for processing datasets
-* `experiments` - code for running experiments
-* `results` - experimental results
-* `analysis` - analyze and visualize the results
-* `gradeclip` - code and experiments with Grad-ECLIP
-* `exclip` - code and experiments with exCLIP
+![faithfulness](data/report_pictures/faithfulness.png)
 
-[![](assets/figure2.png)](https://openreview.net/forum?id=on22Rx5A4F)
+---
 
-## Citation
+### 2. Insertion / Deletion (AID)
 
-If you use the code in your research, please cite:
+Area under the insertion/deletion curve — higher is better.
 
-```bibtex
-@inproceedings{baniecki2025explaining,
-    title     = {Explaining Similarity in Vision-Language Encoders 
-                 with Weighted Banzhaf Interactions},
-    author    = {Hubert Baniecki and Maximilian Muschalik and Fabian Fumagalli and 
-                 Barbara Hammer and Eyke H{\"u}llermeier and Przemyslaw Biecek},
-    booktitle = {Advances in Neural Information Processing Systems},
-    year      = {2025},
-    url       = {https://openreview.net/forum?id=on22Rx5A4F}
-}
-```
+| Script | `experiments/migrated/insertion_deletion.py` (CLIP) / `*_siglip.py` |
+|---|---|
 
-## Acknowledgements
+| Model | Segmenter | Masker | AID ↑ | Insertion ↑ | Deletion ↓ |
+|---|---:|---:|---:|---:|---:|
+| CLIP ViT-B/32 | patch | crossmodal_mean | — | — | — |
 
-FIxLIP is powered by [`shapiq`](https://github.com/mmschlk/shapiq). See also [Grad-ECLIP](https://openreview.net/forum?id=WT4X3QYopC) and [exCLIP](https://openreview.net/forum?id=HUUL19U7HP).
+![aid_clip](data/report_pictures/insertion_deletion_clip.png)
 
+#### SigLIP
 
-This work was financially supported by the state budget within the Polish Ministry of Science and Higher Education program "Pearls of Science" project number PN/01/0087/2022.
+| Model | Segmenter | Masker | AID ↑ |
+|---|---:|---:|--|
+| SigLIP base-patch16 | patch | crossmodal_mean | — |
 
-<img src="assets/logo.png" width="250px">
+![aid_siglip](data/report_pictures/insertion_deletion_siglip.png)
+
+---
+
+### 3. Pointing Game
+
+Positive Gradient Removal (PGR) accuracy — does the explanation correctly identify the
+image region most responsible for the prediction?
+
+| Scripts | `experiments/migrated/pointing_game_banzhaf.py`, `*_shapley.py`, `*_crossmodal.py` |
+|---|---|
+
+#### Banzhaf Interactions
+
+| Model | Segmenter | PGR ↑ |
+|---|---:|---:|
+| CLIP ViT-B/32 | patch | — |
+
+#### Shapley Interactions
+
+| Model | Segmenter | PGR ↑ |
+|---|---:|---:|
+| CLIP ViT-B/32 | patch | — |
+
+#### Crossmodal (Banzhaf)
+
+| Model | Segmenter | PGR ↑ |
+|---|---:|---:|
+| CLIP ViT-B/32 | patch | — |
+
+![pointing_game](data/report_pictures/pointing_game.png)
+
+---
+
+### 4. Qualitative Examples (MSCOCO)
+
+Example Shapley-interaction explanations on real images.
+
+| Script | `experiments/migrated/explain_mscoco.py` (CLIP) / `*_siglip.py` |
+|---|---|
+
+![mscoco_clip](data/report_pictures/mscoco_clip.png)
+
+#### SigLIP
+
+![mscoco_siglip](data/report_pictures/mscoco_siglip.png)
+
+---
+
+### 5. Equivalence — New API vs Legacy
+
+Numerical equivalence between `shapiq.imputer.vision` and the archived `ImputerFactory`.
+
+| Script | `experiments/migrated/test_game_equivalence.py`, `compare_games.py` |
+|---|---|
+
+| Metric | Tolerance | Pass? |
+|---|---|---|
+| `forward_1d` output | Δ < 1e-4 | — |
+| `forward_crossmodal` output | Δ < 1e-4 | — |
+
+---
+
+## Notebooks
+
+### `example.ipynb`
+CLIP ViT-B/32 + PatchSegmenter + CrossModalMeanMasker — full pipeline.
+**Verified**: migrated pipeline produces identical results to the original fixlip implementation.
+
+![example_fixlip](data/report_pictures/example_fixlip.png)
+
+### `example_slic.ipynb`
+CLIP ResNet + SLICSegmenter — perceptual superpixels for CNN backbones.
+
+### `example_blur.ipynb`
+VisionBlurMasker — Gaussian blur occlusion (CPU skimage).
+
+### `example_gradient_guided.ipynb`
+GradientGuidedSegmenter — saliency-guided non-uniform layout.
+
+### `example_siglip.ipynb`
+SigLIP model support.
+
+### `example_faster.ipynb`
+Batch-size tuning and performance profiling.
+
+### `attention_masker_demo.ipynb`
+AttentionMasker — self-attention -inf injection.
+
+### `insertion_deletion.ipynb`
+AID curve computation and plotting.
+
+---
+
+## Adding Results
+
+1. Run the experiment script, save the output figure to `data/report_pictures/`.
+2. Update the relevant section above with numeric metrics or the image.
+3. Add the image using:
+   ```markdown
+   ![label](data/report_pictures/filename.png)
+   ```
