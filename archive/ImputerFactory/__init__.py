@@ -26,6 +26,7 @@ from .data import (
     SlicParams,
     GradientGuidedParams,
     CrossModalMeanParams,
+    VisionBlurParams,
     VisionMeanParams,
     TextAttentionParams,
     ProcessorOutput,

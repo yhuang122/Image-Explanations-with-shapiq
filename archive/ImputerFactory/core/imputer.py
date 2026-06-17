@@ -253,9 +253,9 @@ class ImageImputer:
                 else:
                     # Edge case: txt batch ≠ img batch.
                     # Reuse the already-masked image tensor and only
-                    # re-process the text with the processor.  Some processor
-                    # adapters (e.g. OpenAICLIPAdapter) do not support
-                    # text-only calls, so always pass images as well.
+                    # re-process the text with the processor.  Some
+                    # pretrained processors do not support text-only
+                    # calls, so always pass images as well.
                     img_only = PhysicalMask(image_binary_mask=img_slice_mask.image_binary_mask)
                     masked_img = self.masker.apply(inputs_img_masked, img_only)
 

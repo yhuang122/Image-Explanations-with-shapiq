@@ -157,6 +157,7 @@ class MaskerConfig:
     vision_mean: VisionMeanParams = field(default_factory=VisionMeanParams)
     vision_blur: VisionBlurParams = field(default_factory=VisionBlurParams)
     text_attn: TextAttentionParams = field(default_factory=TextAttentionParams)
+    crossmodal_blur: VisionBlurParams = field(default_factory=VisionBlurParams)
 
     @property
     def active_params(self):

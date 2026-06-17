@@ -37,6 +37,7 @@ def get_segmenter(name: str) -> type[Segmenter]:
 
 __all__ = [
     "CustomSegmenter",
+    "GradientGuidedSegmenter",
     "PatchSegmenter",
     "SLICSegmenter",
     "Segmenter",
@@ -48,5 +49,6 @@ __all__ = [
 
 # Built-in segmenters — imported for registration side effects
 from .custom import CustomSegmenter  # noqa: E402
+from .gradient_guided import GradientGuidedSegmenter  # noqa: E402
 from .patch import PatchSegmenter  # noqa: E402
 from .slic import SLICSegmenter  # noqa: E402

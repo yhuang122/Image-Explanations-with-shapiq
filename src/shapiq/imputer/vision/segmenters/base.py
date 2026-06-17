@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import torch
 
@@ -54,6 +54,18 @@ class CustomSegmenterParams:
     """
 
 
+@dataclass
+class GradientGuidedParams:
+    """Gradient-guided saliency segmentation parameters.
+
+    Attributes:
+        n_segments: Target superpixel count.  ``None`` means derive from
+            ``grid_size`` (ViT) or fall back to 49.
+    """
+
+    n_segments: Optional[int] = None
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Segmenter Configuration
 # ═══════════════════════════════════════════════════════════════════════
@@ -63,7 +75,7 @@ class CustomSegmenterParams:
 class SegmenterConfig:
     """Complete configuration for a Segmenter.
 
-    Caller-provided: strategy + per-strategy params (patch / slic ).
+    Caller-provided: strategy + per-strategy params (patch / slic / gradient_guided).
     Factory-populated: model metadata (image_size, patch_size, model_type, ...).
     Default strategy is ``"patch"``.
     """
@@ -72,6 +84,7 @@ class SegmenterConfig:
     patch: PatchParams = field(default_factory=PatchParams)
     slic: SlicParams = field(default_factory=SlicParams)
     custom_segmenter: CustomSegmenterParams = field(default_factory=CustomSegmenterParams)
+    gradient_guided: GradientGuidedParams = field(default_factory=GradientGuidedParams)
 
     # Factory-populated (model metadata)
     model_type: str = ""
