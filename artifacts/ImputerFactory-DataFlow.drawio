@@ -1,0 +1,136 @@
+<mxfile host="65bd71144e">
+    <diagram name="ImputerFactory Data Flow" id="0">
+        <mxGraphModel dx="1651" dy="1139" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="&lt;b&gt;ImputerFactory — Data Flow&lt;/b&gt;" style="text;html=1;fontSize=20;fillColor=none;strokeColor=none;fontColor=#1a1a2e;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="10" width="500" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f4f8;strokeColor=#c0cfe0;arcSize=8;container=1;pointerEvents=0;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="55" width="1100" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar34" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" parent="s1-bg" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="730" y="114.83000000000001" as="sourcePoint"/>
+                        <mxPoint x="820" y="114.83000000000001" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar23" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;strokeWidth=2;" parent="s1-bg" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="460" y="114.83000000000001" as="sourcePoint"/>
+                        <mxPoint x="550" y="114.83000000000001" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="legend" value="&lt;b&gt;Legend&lt;/b&gt;&lt;br&gt;━━━ Pipeline data flow&lt;br&gt;╌╌╌ Object reference / detail expansion" style="text;html=1;fontSize=11;fillColor=none;strokeColor=none;fontColor=#666666;align=left;" parent="s1-bg" vertex="1">
+                    <mxGeometry x="800" y="15" width="250" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1-title" value="&lt;b&gt;PIPELINE OVERVIEW&lt;/b&gt;&lt;br&gt;From coalition encoding to Shapley values" style="text;html=1;fontSize=10;fillColor=none;strokeColor=none;fontColor=#7a8ba8;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="62" width="350" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="step1" value="&lt;b&gt;① Coalition Input&lt;/b&gt;&lt;br&gt;np.ndarray[bool]&lt;br&gt;(N, n_players)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="140" width="150" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="split-label" value="split into image + text" style="text;html=1;fontSize=11;fillColor=none;strokeColor=none;fontColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="215" width="140" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;exitX=1.002;exitY=0.464;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="step1" target="step2" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="260" y="170" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="270" y="170"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="step2" value="&lt;b&gt;② Segmentation&lt;/b&gt;&lt;br&gt;Segmenter.generate_masks()&lt;br&gt;Coalitions → PhysicalMask" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="130" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="step3" value="&lt;b&gt;③ Occlusion&lt;/b&gt;&lt;br&gt;Masker.apply()&lt;br&gt;Apply PhysicalMask to inputs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="600" y="130" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="step4" value="&lt;b&gt;④ Model Forward&lt;/b&gt;&lt;br&gt;model(**inputs)&lt;br&gt;VLM inference (CLIP/SigLIP)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="870" y="130" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar45" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="step4" target="step5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="step5" value="&lt;b&gt;⑤ Output&lt;/b&gt;&lt;br&gt;Logits → np.ndarray&lt;br&gt;→ VisionLanguageGame → shapiq" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="870" y="230" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="dobj-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf8f0;strokeColor=#d0c8b0;arcSize=8;container=1;pointerEvents=0;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="330" width="1100" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="dobj-bg-title" value="&lt;b&gt;DATA OBJECTS&lt;/b&gt;&lt;br&gt;Standardized contracts flowing between pipeline stages" style="text;html=1;fontSize=10;fillColor=none;strokeColor=none;fontColor=#7a8ba8;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="337" width="350" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="dobj-po" value="&lt;b&gt;ProcessorOutput (original)&lt;/b&gt;&lt;br&gt;pixel_values + input_ids + attention_mask&lt;br&gt;Preprocessed once by Factory, owned by Imputer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="380" width="200" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="dobj-pm" value="&lt;b&gt;PhysicalMask&lt;/b&gt;&lt;br&gt;image_binary_mask (N, C, H, W)&lt;br&gt;text_attention_mask (N, L)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="380" width="200" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="dobj-po-mod" value="&lt;b&gt;ProcessorOutput (modified)&lt;/b&gt;&lt;br&gt;Occluded pixel_values + attention_mask&lt;br&gt;Ready for model.forward()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="590" y="380" width="200" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="dobj-logits" value="&lt;b&gt;Logits / np.array&lt;/b&gt;&lt;br&gt;Similarity scores&lt;br&gt;Consumed by shapiq" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0faf0;strokeColor=#82b366;fontSize=10;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="850" y="380" width="200" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-po-step2" value="layout metadata" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;fontSize=9;strokeColor=#9673a6;fontColor=#9673a6;dashed=1;" parent="1" source="dobj-po" target="step2" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="70" y="408"/>
+                            <mxPoint x="70" y="250"/>
+                            <mxPoint x="380" y="250"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-pm-step3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontSize=9;strokeColor=#9673a6;dashed=1;" parent="1" source="dobj-pm" target="step3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-po-mod-step3" value="original inputs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.3;entryY=1;entryDx=0;entryDy=0;fontSize=9;strokeColor=#9673a6;fontColor=#9673a6;dashed=1;" parent="1" source="dobj-po" target="step3" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="190" y="280"/>
+                            <mxPoint x="654" y="280"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-po-mod-to-step4" value="modified inputs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;fontSize=9;strokeColor=#9673a6;fontColor=#9673a6;dashed=1;" parent="1" source="dobj-po-mod" target="step4" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="870" y="210" as="targetPoint"/>
+                        <Array as="points">
+                            <mxPoint x="690" y="320"/>
+                            <mxPoint x="840" y="320"/>
+                            <mxPoint x="840" y="200"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="mode-title" value="&lt;b&gt;Two Entry Points&lt;/b&gt;" style="text;html=1;fontSize=14;fillColor=none;strokeColor=none;fontColor=#1a1a2e;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="495" width="200" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="mode-1d" value="&lt;b&gt;forward_1d(coalitions)&lt;/b&gt;&lt;br&gt;━━━━━━━━━━━━━━━━━━━━━━&lt;br&gt;• Single coalition array: (N, n_players)&lt;br&gt;• Split into img + text portions&lt;br&gt;• Each row = one image‑text pair&lt;br&gt;• Extract &lt;b&gt;diagonal&lt;/b&gt; of logits matrix&lt;br&gt;• Returns (N,) array — one score per pair" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#6c8ebf;fontSize=11;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="530" width="520" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="mode-xm" value="&lt;b&gt;forward_crossmodal(img, txt)&lt;/b&gt;&lt;br&gt;━━━━━━━━━━━━━━━━━━━━━━&lt;br&gt;• Two separate arrays: (N_img, n_players_img) + (N_txt, n_players_txt)&lt;br&gt;• Nested batch loop (image outer × text inner)&lt;br&gt;• Handles &lt;b&gt;img_bs ≠ txt_bs&lt;/b&gt; edge case via reprocessing&lt;br&gt;• Returns &lt;b&gt;full matrix&lt;/b&gt; (N_img, N_txt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#6c8ebf;fontSize=11;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="600" y="530" width="520" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-to-1d" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;fontSize=10;strokeColor=#6c8ebf;dashed=1;strokeWidth=1;" parent="1" source="step5" target="mode-1d" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="924" y="480"/>
+                            <mxPoint x="206" y="480"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-to-xm" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.7;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;fontSize=10;strokeColor=#6c8ebf;dashed=1;strokeWidth=1;" parent="1" source="step5" target="mode-xm" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="996" y="500"/>
+                            <mxPoint x="756" y="500"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
