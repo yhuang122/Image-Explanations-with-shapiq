@@ -89,7 +89,6 @@ class ImageImputerFactory:
         image_size, patch_size, n_channels = self._extract_vision_dims(model)
         is_vit = patch_size > 0
         grid_size = image_size // patch_size if is_vit else 0
-        n_players_image = grid_size ** 2 if is_vit else 0  # provisional
 
         # ── 3. Preprocess once to determine text players ─────────────────
         inputs_dict = self._preprocess(processor, input_image, input_text, model_type)
@@ -97,14 +96,17 @@ class ImageImputerFactory:
         text_total_length = inputs_dict["input_ids"].shape[1]
 
         # ── 4. Enrich SegmenterConfig with model metadata ───────────────
+        # common files
         segmenter_config.model_type = model_type
         segmenter_config.image_size = image_size
-        segmenter_config.patch_size = patch_size
         segmenter_config.n_channels = n_channels
-        segmenter_config.grid_size = grid_size
-        segmenter_config.n_players_image = n_players_image
         segmenter_config.n_players_text = n_players_text
         segmenter_config.text_total_length = text_total_length
+        # Patch-specific enrichment
+        if strategy == "patch":
+            segmenter_config.patch_size = patch_size
+            segmenter_config.grid_size = grid_size
+            segmenter_config.n_players_image = grid_size ** 2 if is_vit else 0
 
         # ── 5. Create Segmenter (per-strategy dispatch) ──────────────────
         strategy = segmenter_config.strategy

@@ -14,8 +14,6 @@
 | | `PatchSegmenter` | ✅ Done | Rigid grid, supports CLIP/SigLIP/SigLIP2 text masking |
 | | `SLICSegmenter` | ✅ Done | CNN perceptual superpixels via skimage SLIC; CPU index-map → GPU scatter |
 | | `GradientGuidedSegmenter` | ✅ Done | Future exploration: gradient extraction + watershed layout |
-| | `AdaptiveSegmenter` | 🔬 Future | Future exploration: coarse-to-fine subdivision logic |
-| | `HybridSegmenter` | ❌ Out of scope | Not planned for current phase |
 | **Maskers** | `BaseMasker` | ✅ Done | Abstract: `apply(ProcessorOutput, PhysicalMask)` |
 | | `VisionMeanMasker` | ✅ Done | Pure image occlusion (registered as ``"vision_mean"``) |
 | | `TextAttentionMasker` | ✅ Done | Pure text occlusion (registered as ``"text_attn"``) |
@@ -137,7 +135,6 @@
 |---|---|---|---|---|
 | B2.1 | `SLICSegmenter` | CPU: skimage SLIC → 2D index map. GPU: scatter coalition bits via index map | **High** | ✅ Done
 | B2.2 | `GradientGuidedSegmenter` | Future exploration: gradient map → skimage watershed → non-uniform static layout | 🔬 Future | 🔄 In Progress |
-| B2.3 | `AdaptiveSegmenter` | Future exploration: coarse grid → score-driven subdivision → feedback loop. Requires `is_stateful=True` protocol | 🔬 Future | ⬜ Not started |
 
 #### B2a. SLICSegmenter — CLIP-ResNet Validation
 
