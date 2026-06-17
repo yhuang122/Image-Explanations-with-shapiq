@@ -16,18 +16,24 @@ import numpy as np
 from PIL import Image
 
 from aid_outputs import (
-    CURVE_FIELDS,
-    SUMMARY_FIELDS,
     add_curve_context,
     append_rows,
     base_summary_row,
     existing_run_keys,
     interaction_value_path,
+    keep_completed_summary_rows,
+    output_paths,
     run_key_from_values,
     summarize_failure,
     write_run_metadata,
 )
-from aid_schema import MASKER_CHOICES, MODEL_PRESETS, SEGMENTER_CHOICES
+from aid_schema import (
+    CURVE_FIELDS,
+    MASKER_CHOICES,
+    MODEL_PRESETS,
+    SEGMENTER_CHOICES,
+    SUMMARY_FIELDS,
+)
 from aid_suite import (
     build_suite,
     describe_suite,
@@ -41,6 +47,10 @@ LOCAL_SRC_DIR = Path(__file__).resolve().parents[3] / "src"
 
 
 def configure_warnings() -> None:
+    # pandas is pulled in indirectly by sklearn during ProxySHAP imports.
+    # In this Windows environment, importing native pyarrow can crash the
+    # process, and the benchmark does not use pandas' optional Arrow backend.
+    sys.modules.setdefault("pyarrow", None)
     warnings.filterwarnings("ignore", message="Using a slow image processor.*")
     warnings.filterwarnings("ignore", message=".*Torch was not compiled with flash attention.*")
     warnings.filterwarnings("ignore", message="Index FWBII is not a valid index.*")
@@ -69,11 +79,18 @@ def local_src_module(module_name: str):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run AID explanation-quality benchmarks.")
-    parser.add_argument("--config", help="JSON benchmark suite config.")
-    parser.add_argument("--dry-run", action="store_true", help="Print planned runs and exit.")
-    parser.add_argument("--force", action="store_true", help="Recompute runs already present in summary CSV.")
+    parser.add_argument("--config", help="JSON benchmark suite config file.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the expanded benchmark plan and exit. Normal runs already print this plan before execution.",
+    )
+    parser.add_argument("--force", action="store_true", help="Recompute runs even when result CSVs already exist.")
     parser.add_argument("--quiet", action="store_true", help="Suppress final JSON output.")
-    parser.add_argument("--input", help="Single image file or manifest-backed image directory.")
+    parser.add_argument(
+        "--input",
+        help="Single image file or manifest-backed image directory. Relative paths use project root.",
+    )
     parser.add_argument("--text", help="Required text input for single-image input.")
     parser.add_argument("--text-column", choices=("first_caption", "caption"), help="Manifest text column.")
     model_group = parser.add_mutually_exclusive_group()
@@ -113,6 +130,22 @@ def resolve_device(use_cuda: bool):
     return torch.device("cuda" if use_cuda else "cpu")
 
 
+class ProcessorWithAttentionMask:
+    """Delegate to a HF processor and fill missing attention masks for SigLIP-style outputs."""
+
+    def __init__(self, processor):
+        self._processor = processor
+
+    def __call__(self, *args, **kwargs):
+        outputs = self._processor(*args, **kwargs)
+        if "attention_mask" not in outputs and "input_ids" in outputs:
+            outputs["attention_mask"] = (outputs["input_ids"] != 1).long()
+        return outputs
+
+    def __getattr__(self, name: str):
+        return getattr(self._processor, name)
+
+
 def load_model_bundle(model_case: dict[str, Any], device) -> dict[str, Any]:
     from transformers import AutoModel, AutoProcessor
 
@@ -120,7 +153,7 @@ def load_model_bundle(model_case: dict[str, Any], device) -> dict[str, Any]:
     model = AutoModel.from_pretrained(model_case["model_name"])
     model.to(device)
     model.eval()
-    processor = AutoProcessor.from_pretrained(model_case["model_name"])
+    processor = ProcessorWithAttentionMask(AutoProcessor.from_pretrained(model_case["model_name"]))
     return {"model": model, "processor": processor, "model_load_runtime_s": perf_counter() - start}
 
 
@@ -483,10 +516,11 @@ def failure_row(
     method: dict[str, Any],
     game_build_runtime_s: float | None,
     device,
+    output_dir,
     error: Exception,
     total_runtime_s: float,
 ) -> dict[str, Any]:
-    interaction_path = interaction_value_path(suite_output_dir(suite), sample, model_case, strategy, method)
+    interaction_path = interaction_value_path(output_dir, sample, model_case, strategy, method)
     row = base_summary_row(
         sample,
         model_case,
@@ -505,14 +539,16 @@ def run_suite(args: argparse.Namespace, suite: dict[str, Any], output_dir) -> di
     utils = local_src_module("utils")
     utils.set_seed(suite["defaults"]["random_state"])
     device = resolve_device(suite["defaults"]["cuda"])
-    csv_dir = output_dir / "csv"
-    plots_dir = output_dir / "plots"
-    summary_path = csv_dir / "aid_summary.csv"
-    curves_path = csv_dir / "aid_curves.csv"
+    paths = output_paths(output_dir)
+    plots_dir = paths["plots_dir"]
+    summary_path = paths["summary_csv"]
+    curves_path = paths["curves_csv"]
     if args.force:
         for path in (summary_path, curves_path):
             if path.exists():
                 path.unlink()
+    else:
+        keep_completed_summary_rows(summary_path)
 
     completed_keys = existing_run_keys(summary_path)
     model_cache: dict[str, dict[str, Any]] = {}
@@ -584,6 +620,7 @@ def run_suite(args: argparse.Namespace, suite: dict[str, Any], output_dir) -> di
                                 method,
                                 game_build_runtime_s,
                                 device,
+                                output_dir,
                                 error,
                                 perf_counter() - total_start,
                             )

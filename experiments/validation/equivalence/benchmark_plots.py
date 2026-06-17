@@ -8,7 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
-from benchmark_schema import CSV_DIRNAME, PLOT_MODES, PLOTS_DIRNAME
+from benchmark_outputs import output_paths
+from benchmark_schema import PLOT_MODES
 
 
 def parse_report_float(report: dict, field: str):
@@ -179,8 +180,50 @@ def ordered_values(reports: list[dict], field: str) -> list[str]:
     return values
 
 
+def ordered_numeric_text_values(reports: list[dict], field: str) -> list[str]:
+    values = ordered_values(reports, field)
+
+    def sort_key(value: str):
+        try:
+            return (0, float(value), value)
+        except ValueError:
+            return (1, 0.0, value)
+
+    return sorted(values, key=sort_key)
+
+
 def has_multiple_values(reports: list[dict], field: str) -> bool:
     return len(ordered_values(reports, field)) > 1
+
+
+def field_value_summary(reports: list[dict], field: str) -> str:
+    values = ordered_numeric_text_values(reports, field)
+    if not values:
+        return "n/a"
+    if len(values) == 1:
+        return values[0]
+    return "/".join(values)
+
+
+def coalition_context_text(reports: list[dict]) -> str:
+    values = ordered_numeric_text_values(reports, "num_coalitions")
+    if not values:
+        return "validation coalitions=n/a"
+    if all(str(report.get("comparison_type") or "") == "crossmodal" for report in reports):
+        labels = []
+        for value in values:
+            try:
+                count = int(float(value))
+            except ValueError:
+                labels.append(value)
+                continue
+            root = int(np.sqrt(count))
+            if root * root == count and count > 100:
+                labels.append(f"{root} per modality ({count} pairs)")
+            else:
+                labels.append(f"{count} per modality")
+        return f"validation coalitions={'/'.join(labels)}"
+    return f"validation coalitions={field_value_summary(reports, 'num_coalitions')}"
 
 
 def experiment_context(reports: list[dict]) -> str:
@@ -194,7 +237,7 @@ def experiment_context(reports: list[dict]) -> str:
     tolerance_text = f"{tolerance:.0e}" if tolerance is not None else "n/a"
     return (
         f"{dataset} | {len(reports)} runs | "
-        f"coalitions={report.get('num_coalitions', 'n/a')} | "
+        f"{coalition_context_text(reports)} | "
         f"batch={report.get('batch_size', 'n/a')} | tolerance={tolerance_text}"
     )
 
@@ -316,7 +359,7 @@ def write_group_runtime_plot(path: Path, groups: list[dict], title: str) -> None
     ax.bar(x + width / 2, migrated, width, label="Migrated pipeline")
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=35, ha="right")
-    ax.set_ylabel("Mean runtime per run (s)")
+    ax.set_ylabel("Mean pipeline runtime per run (s)")
     ax.set_title(title)
     ax.legend()
     fig.tight_layout()
@@ -342,7 +385,7 @@ def write_single_runtime_plot(path: Path, groups: list[dict], title: str) -> Non
         path,
         [display_label(group["group"]) for group in groups],
         values,
-        "Migrated pipeline mean runtime per run (s)",
+        "Migrated pipeline runtime per run (s)",
         title,
     )
 
@@ -423,9 +466,9 @@ def coverage_table(groups: list[dict], group_header: str) -> tuple[list[str], li
         "Runs",
         "Passed",
         "Pass rate",
-        "Max |output diff|",
-        "Original mean (s)",
-        "Migrated mean (s)",
+        "Max |original - migrated|",
+        "Original runtime (s)",
+        "Migrated runtime (s)",
         "Migrated / Original",
     ]
     rows = [
@@ -467,6 +510,26 @@ def write_coverage_outputs(
         f"{prefix}_coverage_csv": str(csv_path),
         f"{prefix}_coverage_table": str(image_path),
     }
+
+
+def file_token(value: str) -> str:
+    text = "".join(char.lower() if char.isalnum() else "_" for char in str(value))
+    while "__" in text:
+        text = text.replace("__", "_")
+    return text.strip("_") or "value"
+
+
+def coalition_report_groups(reports: list[dict]) -> list[tuple[str | None, list[dict]]]:
+    coalition_values = ordered_numeric_text_values(reports, "num_coalitions")
+    if len(coalition_values) <= 1:
+        return [(None, reports)]
+    return [
+        (
+            f"n{file_token(value)}",
+            [report for report in reports if str(report.get("num_coalitions") or "unknown") == value],
+        )
+        for value in coalition_values
+    ]
 
 
 def strategy_summary(reports: list[dict]) -> list[dict]:
@@ -575,18 +638,30 @@ def write_strategy_baseline_deviation_plot(path: Path, groups: list[dict], title
 
 def strict_plots(csv_dir: Path, plots_dir: Path, reports: list[dict]) -> dict:
     outputs = {}
-    groups = group_summary(reports, "case")
     context = experiment_context(reports)
-    outputs.update(
-        write_coverage_outputs(
-            csv_dir,
-            plots_dir,
-            "equivalence_strict",
-            f"Strict equivalence summary by case\n{context}",
-            groups,
-            "Validation case",
+    for suffix, budget_reports in coalition_report_groups(reports):
+        groups = group_summary(budget_reports, "case")
+        budget_context = experiment_context(budget_reports)
+        prefix = "equivalence_strict" if suffix is None else f"equivalence_strict_{suffix}"
+        outputs.update(
+            write_coverage_outputs(
+                csv_dir,
+                plots_dir,
+                prefix,
+                f"Strict equivalence summary by case\n{budget_context}",
+                groups,
+                "Validation case",
+            )
         )
-    )
+    if has_multiple_values(reports, "num_coalitions"):
+        for stale_path in (
+            csv_dir / "equivalence_strict_coverage_table.csv",
+            plots_dir / "equivalence_strict_coverage_table.png",
+        ):
+            if stale_path.exists():
+                stale_path.unlink()
+
+    groups = group_summary(reports, "case")
     write_histogram(
         plots_dir / "equivalence_strict_max_output_diff_distribution.png",
         [benchmark_max_diff(report) for report in reports],
@@ -756,8 +831,9 @@ def write_benchmark_plots(
 ) -> dict:
     if mode not in PLOT_MODES:
         raise ValueError(f"mode must be one of {', '.join(PLOT_MODES)}")
-    plots_dir = plots_dir or output_dir / PLOTS_DIRNAME
-    csv_dir = csv_dir or output_dir / CSV_DIRNAME
+    paths = output_paths(output_dir)
+    plots_dir = plots_dir or paths["plots_dir"]
+    csv_dir = csv_dir or paths["csv_dir"]
     plots_dir.mkdir(parents=True, exist_ok=True)
     csv_dir.mkdir(parents=True, exist_ok=True)
     if mode == "strict":

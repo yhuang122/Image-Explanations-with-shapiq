@@ -23,6 +23,7 @@ from benchmark_outputs import (
     read_existing_report,
     suite_output_dir,
     write_benchmark_summary,
+    write_failure_result,
     write_original_summary,
     write_run_metadata,
     write_results,
@@ -37,13 +38,12 @@ from benchmark_schema import (
     SEGMENTER_CHOICES,
 )
 from benchmark_suite import (
-    build_suite,
     DEFAULT_VISION_BLUR_SIGMA,
+    build_suites,
     describe_suite,
     resolve_input_samples,
     resolve_model_case,
     runtime_args,
-    suite_output_name,
 )
 
 
@@ -85,8 +85,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         help=(
-            "JSON benchmark suite config. When set, cases/inputs/models/strategies "
-            "are expanded from the config file."
+            "JSON benchmark suite config file or a folder of JSON sub-suites. "
+            "A folder writes all sub-suite results into one shared results folder."
         ),
     )
     parser.add_argument(
@@ -406,7 +406,7 @@ def build_benchmark_report(
         "original_n_players_image": int(old_game.n_players_image),
         "original_n_players_text": int(old_game.n_players_text),
         "coalition_comparison_available": bool(coalition_comparison_available),
-        "num_coalitions": int(new_pipeline_values.shape[0]),
+        "num_coalitions": int(run_config["num_coalitions"]),
         "batch_size": int(run_config["batch_size"]),
         "random_state": int(run_config["random_state"]),
         "tolerance": run_args.tolerance,
@@ -435,6 +435,112 @@ def build_benchmark_report(
     report["benchmark_metric_mean_output_diff"] = mean_output_diff_metric(report)
     report["passed"] = report["equivalence_passed"] if strict_equivalence else None
     return report
+
+
+def infer_model_type(model_name: str) -> str:
+    name = model_name.lower()
+    if "siglip2" in name:
+        return "siglip2"
+    if "siglip" in name:
+        return "siglip"
+    if "clip" in name:
+        return "clip"
+    return "unknown"
+
+
+def model_image_layout(model_bundle: dict) -> dict:
+    embeddings = model_bundle["model"].vision_model.embeddings
+    image_size = int(embeddings.image_size)
+    patch_size = int(embeddings.patch_size)
+    grid_size = image_size // patch_size
+    return {
+        "image_size": image_size,
+        "patch_size": patch_size,
+        "grid_size": grid_size,
+        "n_players_image": grid_size**2,
+    }
+
+
+def build_failure_report(
+    *,
+    run_args: argparse.Namespace,
+    run_config: dict,
+    device,
+    model_bundle: dict,
+    total_start: float,
+    error: Exception,
+) -> dict:
+    layout = model_image_layout(model_bundle)
+    candidate_name = (
+        f"{MIGRATED_PIPELINE}:"
+        f"{run_config['segmenter_config'].strategy}/{run_config['masker_config'].strategy}"
+    )
+    return {
+        "case": run_args.case,
+        "strategy_name": run_config["strategy_name"],
+        "original_pipeline": ORIGINAL_PIPELINE,
+        "migrated_pipeline": MIGRATED_PIPELINE,
+        "comparison_type": run_config["comparison_type"],
+        "comparison_mode": "setup_failure",
+        "comparison_scope": "original_pipeline_incompatible",
+        "reference_name": ORIGINAL_PIPELINE,
+        "candidate_name": candidate_name,
+        "equivalence_expected": False,
+        "metric_family": f"setup_failure:{type(error).__name__}",
+        "input_path": str(run_config["input_path"]),
+        "model_preset": run_config["model_preset"],
+        "model_name": run_config["model_name"],
+        "model_type": infer_model_type(run_config["model_name"]),
+        "text": run_config["text"],
+        "text_full": run_config["text_full"],
+        "text_source": run_config["text_source"],
+        "device": str(device),
+        "use_amp": bool(run_config["use_amp"]),
+        "segmenter_strategy": run_config["segmenter_config"].strategy,
+        "segmenter_params": compact_json(active_params(run_config["segmenter_config"])),
+        "masker_strategy": run_config["masker_config"].strategy,
+        "masker_params": compact_json(active_params(run_config["masker_config"])),
+        "image_size": layout["image_size"],
+        "patch_size": layout["patch_size"],
+        "grid_size": layout["grid_size"],
+        "text_total_length": "",
+        "n_players": "",
+        "n_players_image": "",
+        "n_players_text": "",
+        "original_n_players": "",
+        "original_n_players_image": "",
+        "original_n_players_text": "",
+        "coalition_comparison_available": False,
+        "num_coalitions": int(run_config["num_coalitions"]),
+        "batch_size": int(run_config["batch_size"]),
+        "random_state": int(run_config["random_state"]),
+        "tolerance": run_args.tolerance,
+        "model_load_runtime_s": model_bundle["model_load_runtime_s"],
+        "original_game_build_runtime_s": "",
+        "migrated_game_build_runtime_s": "",
+        "original_anchor_runtime_s": "",
+        "migrated_anchor_runtime_s": "",
+        "build_runtime_s": "",
+        "original_pipeline_runtime_s": "",
+        "migrated_pipeline_runtime_s": "",
+        "total_runtime_s": perf_counter() - total_start,
+        "original_pipeline_empty_coalition_output": "",
+        "migrated_pipeline_empty_coalition_output": "",
+        "abs_empty_coalition_output_diff": "",
+        "original_pipeline_full_coalition_output": "",
+        "migrated_pipeline_full_coalition_output": "",
+        "abs_full_coalition_output_diff": "",
+        "empty_full_anchor_max_abs_output_diff": "",
+        "empty_full_anchor_mean_abs_output_diff": "",
+        "empty_full_anchor_passed": False,
+        "coalition_max_abs_output_diff": "",
+        "coalition_mean_abs_output_diff": "",
+        "benchmark_metric_max_output_diff": "",
+        "benchmark_metric_mean_output_diff": "",
+        "equivalence_passed": False,
+        "passed": False,
+        "strict_equivalence": False,
+    }
 
 
 def run_strategy_comparison(
@@ -606,6 +712,7 @@ def run_suite(args: argparse.Namespace, suite: dict, output_dir: Path) -> list[d
     device = resolve_device(bool(suite["defaults"]["cuda"]))
     model_cache = {}
     input_context_cache = {}
+    input_context_error_cache = {}
     reports = []
 
     for case_entry in suite["cases"]:
@@ -660,24 +767,45 @@ def run_suite(args: argparse.Namespace, suite: dict, output_dir: Path) -> list[d
                                 model_cache[model_key] = load_model_bundle(model_config, device)
                             model_bundle = model_cache[model_key]
                             context_key = (model_key, str(input_path), text, run_args.batch_size)
-                            if context_key not in input_context_cache:
-                                input_context_cache[context_key] = build_original_context(
-                                    model_bundle,
-                                    input_path,
-                                    text,
-                                    run_args.batch_size,
+                            total_start = perf_counter()
+                            try:
+                                if context_key in input_context_error_cache:
+                                    raise input_context_error_cache[context_key]
+                                if context_key not in input_context_cache:
+                                    input_context_cache[context_key] = build_original_context(
+                                        model_bundle,
+                                        input_path,
+                                        text,
+                                        run_args.batch_size,
+                                    )
+                                input_context = input_context_cache[context_key]
+                                reports.append(
+                                    run_strategy_comparison(
+                                        strategy_run_config,
+                                        run_args,
+                                        device,
+                                        model_bundle,
+                                        input_context,
+                                        output_dir,
+                                    )
                                 )
-                            input_context = input_context_cache[context_key]
-                            reports.append(
-                                run_strategy_comparison(
-                                    strategy_run_config,
-                                    run_args,
-                                    device,
-                                    model_bundle,
-                                    input_context,
+                            except Exception as error:
+                                if context_key not in input_context_cache:
+                                    input_context_error_cache[context_key] = error
+                                failure_report = build_failure_report(
+                                    run_args=run_args,
+                                    run_config=strategy_run_config,
+                                    device=device,
+                                    model_bundle=model_bundle,
+                                    total_start=total_start,
+                                    error=error,
+                                )
+                                failure_report["result_paths"] = write_failure_result(
                                     output_dir,
+                                    strategy_run_config,
+                                    failure_report,
                                 )
-                            )
+                                reports.append(failure_report)
 
                         if device.type == "cuda":
                             import torch
@@ -688,16 +816,26 @@ def run_suite(args: argparse.Namespace, suite: dict, output_dir: Path) -> list[d
 
 def main() -> int:
     args = parse_args()
-    suite = build_suite(args)
-    output_dir = suite_output_dir(suite_output_name(suite))
-    plan = describe_suite(suite)
+    suites, output_name = build_suites(args)
+    output_dir = suite_output_dir(output_name)
+    suite_plans = [describe_suite(suite) for suite in suites]
+    plan = suite_plans[0] if len(suite_plans) == 1 else {
+        "name": output_name,
+        "config_path": args.config,
+        "suite_count": len(suite_plans),
+        "planned_runs": sum(suite_plan["planned_runs"] for suite_plan in suite_plans),
+        "suites": suite_plans,
+    }
     if args.dry_run:
         print(json.dumps(plan, indent=2))
         return 0
 
     print(json.dumps({"benchmark_plan": plan}, indent=2), flush=True)
-    metadata_paths = write_run_metadata(output_dir, args, suite, plan)
-    reports = run_suite(args, suite, output_dir)
+    metadata_suite = suites[0] if len(suites) == 1 else {"name": output_name, "suites": suites}
+    metadata_paths = write_run_metadata(output_dir, args, metadata_suite, plan)
+    reports = []
+    for suite in suites:
+        reports.extend(run_suite(args, suite, output_dir))
 
     if args.run_mode == "original":
         result_paths = write_original_summary(output_dir, reports)

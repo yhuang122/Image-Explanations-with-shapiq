@@ -15,7 +15,7 @@ use AID, insertion-deletion, and faithfulness-style quality metrics.
 This benchmark is the numerical validation side of the migration work:
 
 ```text
-same image + same text + same model + same sampled coalitions
+same image + same text + same model + same sampled validation coalitions
 -> original FIxLIP-style game output
 -> migrated pipeline game output
 -> absolute output difference
@@ -52,7 +52,7 @@ Strict equivalence is only expected for the standard setup:
 
 This setup preserves the original patch-based player layout and masking behavior. Therefore, the
 original FIxLIP-style pipeline and the migrated pipeline should produce matching value-function
-outputs under the same image, text, model, coalitions, and random seed.
+outputs under the same image, text, model, sampled validation coalitions, and random seed.
 
 For this setup, output differences should remain within the configured tolerance.
 
@@ -107,17 +107,18 @@ For a single image, pass both image and text explicitly:
 
 ## Preset Suites
 
-The core equivalence benchmark uses four suites. These cover strict A2 equivalence, A3 model
-coverage, migrated strategy compatibility, and crossmodal player coverage.
+The core equivalence benchmark uses staged suites. The already completed standard strict path is
+kept separate from heavier cross/crossmodal paths so the expensive parts can use fewer sampled
+validation coalitions.
 
-| Preset | Plot mode | Purpose | Planned runs |
-|---|---|---|---:|
-| `benchmark_suite.equivalence_strict.json` | `strict` | Strict original-vs-migrated numerical equivalence for all 8 migrated cases using each case's default model. | 800 |
-| `benchmark_suite.equivalence_models.json` | `models` | A3 model coverage for CLIP ViT-B/32, CLIP ViT-B/16, CLIP ViT-L/14, SigLIP, and SigLIP2 so400m. | 1000 |
-| `benchmark_suite.equivalence_strategies.json` | `strategies` | Migrated strategy coverage plus baseline-deviation comparison. | 800 |
-| `benchmark_suite.equivalence_crossmodal.json` | `crossmodal` | Crossmodal image-text player value-function coverage. | 100 |
+| Suite path | Plot mode | Purpose | Planned runs | Validation coalitions |
+|---|---|---|---:|---:|
+| `suites/equivalence_strict_mscoco100_clip_b32/` | `strict` | Strict original-vs-migrated numerical equivalence. Contains standard 600-run strict coverage plus the 200-run heavy/cross remainder. | 800 | mixed: 50 + 1000 + 2500 |
+| `suites/equivalence_models_mscoco100_n50/` | `models` | A3 model coverage for CLIP ViT-B/32, CLIP ViT-B/16, CLIP ViT-L/14, SigLIP, and SigLIP2 so400m. | 1000 | 50 |
+| `suites/equivalence_strategies_mscoco100_clip_b32/` | `strategies` | Migrated strategy coverage plus baseline-deviation comparison. | 800 | 1000 |
+| `suites/equivalence_crossmodal_mscoco100_clip_b32_n50/` | `crossmodal` | Crossmodal image-text player value-function coverage. | 100 | 50 |
 
-Running the four staged A2/A3 presets gives:
+Running the staged A2/A3 presets gives:
 
     800 + 1000 + 800 + 100 = 2700 planned runs
 
@@ -131,10 +132,9 @@ CLIP + SigLIP strategy request. They are not required for the core A2/A3 equival
 they should not be used as explanation-quality evidence. Full segmenter/masker quality comparison
 belongs in `../quality/`.
 
-| Optional preset | Plot mode | Purpose | Planned runs |
+| Optional suite path | Plot mode | Purpose | Planned runs |
 |---|---|---|---:|
-| `benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part1.json` | `strategies` | Insertion-deletion compatibility over 100 images for CLIP + SigLIP with the first supported strategy group. | 800 |
-| `benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part2.json` | `strategies` | Insertion-deletion compatibility over 100 images for CLIP + SigLIP with the second supported strategy group. | 1200 |
+| `suites/equivalence_insertion_deletion_clip_siglip_strategies_mscoco100/` | `strategies` | Insertion-deletion compatibility over 100 images for CLIP + SigLIP. Contains `part1.json` and `part2.json`. | 2000 |
 
     part1 + part2 = 800 + 1200 = 2000 planned runs
 
@@ -142,7 +142,7 @@ belongs in `../quality/`.
 
 For a first local check, run the strict suite:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strict.json
+    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\suites\equivalence_strict_mscoco100_clip_b32
 
 Normal benchmark runs print the planned run summary first, save it under `metadata/`, and then
 start execution. Use `--dry-run` only when you want a preview-only plan without loading models.
@@ -153,29 +153,28 @@ This verifies the standard `patch/crossmodal_mean` path before broader model or 
 
 Strict equivalence:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strict.json
+    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\suites\equivalence_strict_mscoco100_clip_b32
 
 Model coverage:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_models.json
+    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\suites\equivalence_models_mscoco100_n50
 
 Strategy coverage:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strategies.json
+    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\suites\equivalence_strategies_mscoco100_clip_b32
 
 Crossmodal coverage:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_crossmodal.json
+    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\suites\equivalence_crossmodal_mscoco100_clip_b32_n50
 
 Insertion-deletion CLIP + SigLIP strategy coverage:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part1.json
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_insertion_deletion_clip_siglip_strategies_part2.json
+    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\suites\equivalence_insertion_deletion_clip_siglip_strategies_mscoco100
 
 Interrupted runs resume automatically. Existing valid `csv/*_comparison.csv` files are skipped.
 Use `--force` only when a preset should be recomputed from scratch:
 
-    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\benchmark_suite.equivalence_strict.json --force
+    python .\experiments\validation\equivalence\benchmark_equivalence.py --config .\experiments\validation\equivalence\suites\equivalence_strict_mscoco100_clip_b32 --force
 
 ## Runtime Parameters
 
@@ -183,7 +182,7 @@ Important CLI parameters:
 
 | Parameter | Meaning |
 |---|---|
-| `--config` | JSON preset for batch benchmarks. |
+| `--config` | JSON suite file or a suite folder containing multiple JSON sub-suites. Folder input writes all sub-suite results to one shared results folder. |
 | `--dry-run` | Preview-only mode. Normal runs already print the plan before execution. |
 | `--force` | Recompute existing run CSVs. |
 | `--case` | Single migrated game name. |
@@ -195,7 +194,7 @@ Important CLI parameters:
 | `--segmenter-strategy` | Explicit segmenter strategy, such as `patch` or `slic`. |
 | `--masker-strategy` | Explicit masker strategy, such as `crossmodal_mean`, `vision_mean`, or `text_attn`. |
 | `--vision-blur-sigma` | Gaussian blur sigma for single-run `vision_blur` and `crossmodal_blur`. JSON suites can use `vision_blur.sigma` or `crossmodal_blur.sigma`. |
-| `--num-coalitions` | Number of sampled coalitions per run. |
+| `--num-coalitions` | Number of sampled validation coalitions per run for output-equivalence checks. |
 | `--batch-size` | Model batch size for coalition evaluation. |
 | `--tolerance` | Numerical equivalence threshold. |
 | `--cuda` | Run on CUDA. |
@@ -217,6 +216,7 @@ Each preset writes to its own result directory:
         config_used.json
       csv/
         summary.csv
+        original_pipeline.csv
         *_coverage_table.csv
         *_comparison.csv
       plots/
@@ -252,7 +252,7 @@ Strict:
 
 Models:
 
-    python .\experiments\validation\equivalence\plot_results.py --input .\experiments\validation\equivalence\results\benchmark_equivalence_models_mscoco100\csv --mode models
+    python .\experiments\validation\equivalence\plot_results.py --input .\experiments\validation\equivalence\results\benchmark_equivalence_models_mscoco100_n50\csv --mode models
 
 Strategies:
 
@@ -264,7 +264,7 @@ Insertion-deletion CLIP + SigLIP strategies, after part1 and part2 have both run
 
 Crossmodal:
 
-    python .\experiments\validation\equivalence\plot_results.py --input .\experiments\validation\equivalence\results\benchmark_equivalence_crossmodal_mscoco100_clip_b32\csv --mode crossmodal
+    python .\experiments\validation\equivalence\plot_results.py --input .\experiments\validation\equivalence\results\benchmark_equivalence_crossmodal_mscoco100_clip_b32_n50\csv --mode crossmodal
 
 ## Plot Interpretation
 
@@ -276,7 +276,7 @@ Use this suite to answer:
 
 Main outputs:
 
-- `equivalence_strict_coverage_table.png`: pass count, max output difference, and runtime by validation case.
+- `equivalence_strict_n<validation_coalitions>_coverage_table.png`: pass count, max output difference, and runtime by validation case, split by validation-coalition count when one result folder contains mixed settings.
 - `equivalence_strict_max_output_diff_distribution.png`: run-level max output difference distribution.
 - `equivalence_strict_runtime_by_case.png`: original baseline runtime vs migrated pipeline runtime.
 

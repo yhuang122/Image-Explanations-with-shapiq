@@ -13,6 +13,8 @@ import numpy as np
 from PIL import Image
 from shapiq import InteractionValues
 
+from aid_outputs import CSV_DIRNAME, output_paths
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -79,8 +81,8 @@ def select_summary_row(summary_path: Path, run_id: str | None) -> dict[str, str]
 
 
 def default_output_path(summary_path: Path, run_id: str) -> Path:
-    suite_dir = summary_path.parent.parent if summary_path.parent.name == "csv" else summary_path.parent
-    return suite_dir / "plots" / "qualitative" / f"{run_id}_fixlip_paper_style.png"
+    suite_dir = summary_path.parent.parent if summary_path.parent.name == CSV_DIRNAME else summary_path.parent
+    return output_paths(suite_dir)["plots_dir"] / "qualitative" / f"{run_id}_fixlip_paper_style.png"
 
 
 def resolve_existing_path(value: str, base_dir: Path) -> Path:

@@ -91,13 +91,31 @@ def require_cli_args(args: argparse.Namespace) -> None:
         raise ValueError(f"Missing required argument(s) without --config: {', '.join(missing)}")
 
 
-def load_json_config(path_value: str) -> dict:
-    path = resolve_project_path(path_value)
+def load_json_config(path_value: str | Path) -> dict:
+    path = path_value if isinstance(path_value, Path) else resolve_project_path(path_value)
     if path.suffix.lower() != ".json":
         raise ValueError("Only JSON benchmark presets are supported.")
     if not path.exists():
         raise FileNotFoundError(f"Benchmark config not found: {path}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def config_json_paths(path_value: str) -> list[Path]:
+    path = resolve_project_path(path_value)
+    if path.is_file():
+        return [path]
+    if not path.is_dir():
+        raise FileNotFoundError(f"Benchmark config path not found: {path}")
+    paths = sorted(path.glob("*.json"))
+    if not paths:
+        raise FileNotFoundError(f"Benchmark config directory contains no JSON files: {path}")
+    return paths
+
+
+def suite_group_output_name(path_value: str) -> str:
+    path = resolve_project_path(path_value)
+    name = slug(path.name if path.is_dir() else path.stem, max_length=80)
+    return name if name.startswith("benchmark_") else f"benchmark_{name}"
 
 
 def merged_defaults(config: dict, args: argparse.Namespace) -> dict:
@@ -263,6 +281,24 @@ def normalize_strategies(raw_strategies, args: argparse.Namespace) -> list[dict]
     return [normalize_strategy(strategy) for strategy in raw_strategies]
 
 
+def build_suite_from_config(config: dict, args: argparse.Namespace, config_path: Path | None = None) -> dict:
+    name = config.get("name")
+    if name is None and config_path is not None:
+        name = config_path.stem
+    elif name is None:
+        name = Path(args.config).stem
+    return {
+        "name": name,
+        "run_mode": args.run_mode,
+        "single_text": args.text,
+        "defaults": merged_defaults(config, args),
+        "cases": normalize_cases(config.get("cases"), args.case),
+        "inputs": normalize_inputs(config.get("inputs"), args),
+        "models": normalize_models(config.get("models"), args),
+        "strategies": normalize_strategies(config.get("strategies"), args),
+    }
+
+
 def build_suite(args: argparse.Namespace) -> dict:
     if args.config is None:
         require_cli_args(args)
@@ -286,16 +322,24 @@ def build_suite(args: argparse.Namespace) -> dict:
         }
 
     config = load_json_config(args.config)
-    return {
-        "name": config.get("name") or Path(args.config).stem,
-        "run_mode": args.run_mode,
-        "single_text": args.text,
-        "defaults": merged_defaults(config, args),
-        "cases": normalize_cases(config.get("cases"), args.case),
-        "inputs": normalize_inputs(config.get("inputs"), args),
-        "models": normalize_models(config.get("models"), args),
-        "strategies": normalize_strategies(config.get("strategies"), args),
-    }
+    return build_suite_from_config(config, args)
+
+
+def build_suites(args: argparse.Namespace) -> tuple[list[dict], str]:
+    if args.config is None:
+        suite = build_suite(args)
+        return [suite], suite_output_name(suite)
+
+    config_path = resolve_project_path(args.config)
+    if config_path.is_dir():
+        suites = [
+            build_suite_from_config(load_json_config(path), args, path)
+            for path in config_json_paths(args.config)
+        ]
+        return suites, suite_group_output_name(args.config)
+
+    suite = build_suite(args)
+    return [suite], suite_output_name(suite)
 
 
 def resolve_model_selection(case: dict, args: argparse.Namespace) -> None:

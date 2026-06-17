@@ -10,9 +10,29 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from aid_schema import CURVE_FIELDS, PROJECT_ROOT, RUN_KEY_FIELDS, SUMMARY_FIELDS, Sample, slug
+from aid_schema import PROJECT_ROOT, RUN_KEY_FIELDS, SUMMARY_FIELDS, Sample, slug
 
 METADATA_DIRNAME = "metadata"
+CSV_DIRNAME = "csv"
+PLOTS_DIRNAME = "plots"
+INTERACTION_VALUES_DIRNAME = "interaction_values"
+SUMMARY_FILENAME = "aid_summary.csv"
+CURVES_FILENAME = "aid_curves.csv"
+
+
+def output_paths(output_dir: Path) -> dict[str, Path]:
+    metadata_dir = output_dir / METADATA_DIRNAME
+    csv_dir = output_dir / CSV_DIRNAME
+    plots_dir = output_dir / PLOTS_DIRNAME
+    interaction_values_dir = output_dir / INTERACTION_VALUES_DIRNAME
+    return {
+        "metadata_dir": metadata_dir,
+        "csv_dir": csv_dir,
+        "plots_dir": plots_dir,
+        "interaction_values_dir": interaction_values_dir,
+        "summary_csv": csv_dir / SUMMARY_FILENAME,
+        "curves_csv": csv_dir / CURVES_FILENAME,
+    }
 
 
 def run_id(sample: Sample, model_case: dict[str, Any], strategy: dict[str, Any], method: dict[str, Any]) -> str:
@@ -47,7 +67,7 @@ def interaction_value_path(output_dir: Path, sample: Sample, model_case: dict[st
     )
     short_hash = hashlib.sha1(context.encode("utf-8")).hexdigest()[:10]
     filename = f"{run_id(sample, model_case, strategy, method)}_{short_hash}.json"
-    return output_dir / "interaction_values" / filename
+    return output_paths(output_dir)["interaction_values_dir"] / filename
 
 
 def run_key_from_values(values: dict[str, Any]) -> tuple[str, ...]:
@@ -59,6 +79,21 @@ def existing_run_keys(summary_path: Path) -> set[tuple[str, ...]]:
         return set()
     with summary_path.open(newline="", encoding="utf-8") as file:
         return {run_key_from_values(row) for row in csv.DictReader(file) if row.get("status") == "completed"}
+
+
+def keep_completed_summary_rows(summary_path: Path) -> None:
+    """Drop stale failed rows before resuming a suite."""
+    if not summary_path.exists():
+        return
+    with summary_path.open(newline="", encoding="utf-8") as file:
+        rows = list(csv.DictReader(file))
+    completed = [row for row in rows if row.get("status") == "completed"]
+    if len(completed) == len(rows):
+        return
+    with summary_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=SUMMARY_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(completed)
 
 
 def append_rows(path: Path, fieldnames: tuple[str, ...], rows: list[dict[str, Any]]) -> None:
@@ -75,7 +110,9 @@ def append_rows(path: Path, fieldnames: tuple[str, ...], rows: list[dict[str, An
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+    tmp_path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+    tmp_path.replace(path)
 
 
 def package_version(package_name: str) -> str | None:
@@ -111,7 +148,7 @@ def environment_info() -> dict[str, Any]:
 
 
 def write_run_metadata(output_dir: Path, args, suite: dict[str, Any], plan: dict[str, Any]) -> dict[str, str]:
-    metadata_dir = output_dir / METADATA_DIRNAME
+    metadata_dir = output_paths(output_dir)["metadata_dir"]
     paths = {
         "benchmark_plan": metadata_dir / "benchmark_plan.json",
         "suite_normalized": metadata_dir / "suite_normalized.json",
@@ -239,13 +276,19 @@ def add_curve_context(row: dict[str, Any], curve: dict[str, Any]) -> dict[str, A
 
 
 __all__ = (
-    "CURVE_FIELDS",
-    "SUMMARY_FIELDS",
+    "CURVES_FILENAME",
+    "CSV_DIRNAME",
+    "INTERACTION_VALUES_DIRNAME",
+    "METADATA_DIRNAME",
+    "PLOTS_DIRNAME",
+    "SUMMARY_FILENAME",
     "add_curve_context",
     "append_rows",
     "base_summary_row",
     "existing_run_keys",
     "interaction_value_path",
+    "keep_completed_summary_rows",
+    "output_paths",
     "run_key_from_values",
     "summarize_failure",
     "write_run_metadata",

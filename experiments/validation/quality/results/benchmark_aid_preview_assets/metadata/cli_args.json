@@ -1,7 +1,7 @@
 {
   "config": ".\\experiments\\validation\\quality\\benchmark_suite.aid_preview_assets.json",
   "dry_run": false,
-  "force": false,
+  "force": true,
   "quiet": false,
   "input": null,
   "text": null,

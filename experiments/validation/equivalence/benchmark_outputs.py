@@ -18,6 +18,7 @@ from benchmark_schema import (
     BENCHMARK_SUMMARY_FIELDS,
     COMPARISON_SCOPE_FIELDS,
     CSV_DIRNAME,
+    PLOTS_DIRNAME,
     PROJECT_ROOT,
     RESULTS_DIR,
     ROW_FIELDS,
@@ -26,8 +27,22 @@ from benchmark_schema import (
 )
 
 
-RUNS_DIRNAME = CSV_DIRNAME
 METADATA_DIRNAME = "metadata"
+SUMMARY_FILENAME = "summary.csv"
+ORIGINAL_PIPELINE_FILENAME = "original_pipeline.csv"
+
+
+def output_paths(output_dir: Path) -> dict[str, Path]:
+    csv_dir = output_dir / CSV_DIRNAME
+    plots_dir = output_dir / PLOTS_DIRNAME
+    metadata_dir = output_dir / METADATA_DIRNAME
+    return {
+        "metadata_dir": metadata_dir,
+        "csv_dir": csv_dir,
+        "plots_dir": plots_dir,
+        "summary_csv": csv_dir / SUMMARY_FILENAME,
+        "original_pipeline_csv": csv_dir / ORIGINAL_PIPELINE_FILENAME,
+    }
 
 
 def active_params(config) -> dict:
@@ -184,7 +199,7 @@ def config_path_from_args(args) -> Path | None:
 
 
 def write_run_metadata(output_dir: Path, args, suite: dict, plan: dict) -> dict:
-    metadata_dir = output_dir / METADATA_DIRNAME
+    metadata_dir = output_paths(output_dir)["metadata_dir"]
     paths = {
         "benchmark_plan": metadata_dir / "benchmark_plan.json",
         "suite_normalized": metadata_dir / "suite_normalized.json",
@@ -198,14 +213,25 @@ def write_run_metadata(output_dir: Path, args, suite: dict, plan: dict) -> dict:
 
     config_path = config_path_from_args(args)
     if config_path is not None:
-        paths["config_used"] = metadata_dir / "config_used.json"
-        shutil.copyfile(config_path, paths["config_used"])
+        if config_path.is_dir():
+            configs_dir = metadata_dir / "configs"
+            if configs_dir.exists():
+                for old_config in configs_dir.glob("*.json"):
+                    old_config.unlink()
+            else:
+                configs_dir.mkdir(parents=True, exist_ok=True)
+            for source in sorted(config_path.glob("*.json")):
+                shutil.copyfile(source, configs_dir / source.name)
+            paths["config_dir"] = configs_dir
+        else:
+            paths["config_used"] = metadata_dir / "config_used.json"
+            shutil.copyfile(config_path, paths["config_used"])
 
     return {key: str(path) for key, path in paths.items()}
 
 
 def comparison_csv_path(output_dir: Path, case: dict) -> Path:
-    return output_dir / RUNS_DIRNAME / f"{run_name(case)}_comparison.csv"
+    return output_paths(output_dir)["csv_dir"] / f"{run_name(case)}_comparison.csv"
 
 
 def true_text(value) -> bool:
@@ -376,11 +402,29 @@ def write_results(
     tmp_path.replace(csv_path)
     return {"csv": str(csv_path)}
 
+
+def write_failure_result(output_dir: Path, case: dict, report: dict) -> dict:
+    csv_path = comparison_csv_path(output_dir, case)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = csv_path.with_suffix(f"{csv_path.suffix}.tmp")
+    with tmp_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=SUMMARY_FIELDS + ROW_FIELDS)
+        writer.writeheader()
+        row = {field: report.get(field, "") for field in SUMMARY_FIELDS}
+        row.update({field: "" for field in ROW_FIELDS})
+        row["row_type"] = "failure"
+        writer.writerow(row)
+    tmp_path.replace(csv_path)
+    return {"csv": str(csv_path)}
+
+
 def write_benchmark_summary(output_dir: Path, reports: list[dict], plot_mode: str | None = None) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
-    csv_dir = output_dir / CSV_DIRNAME
+    paths = output_paths(output_dir)
+    csv_dir = paths["csv_dir"]
+    plots_dir = paths["plots_dir"]
     csv_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = csv_dir / "summary.csv"
+    summary_path = paths["summary_csv"]
     tmp_summary_path = summary_path.with_suffix(f"{summary_path.suffix}.tmp")
 
     with tmp_summary_path.open("w", newline="", encoding="utf-8") as file:
@@ -396,13 +440,23 @@ def write_benchmark_summary(output_dir: Path, reports: list[dict], plot_mode: st
     if plot_mode is not None:
         from benchmark_plots import write_benchmark_plots
 
-        result_paths.update(write_benchmark_plots(output_dir, reports, plot_mode))
+        result_paths.update(
+            write_benchmark_plots(
+                output_dir,
+                reports,
+                plot_mode,
+                plots_dir=plots_dir,
+                csv_dir=csv_dir,
+            )
+        )
     return result_paths
 
 
 def write_original_summary(output_dir: Path, reports: list[dict]) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = output_dir / "original_pipeline.csv"
+    paths = output_paths(output_dir)
+    paths["csv_dir"].mkdir(parents=True, exist_ok=True)
+    summary_path = paths["original_pipeline_csv"]
     tmp_summary_path = summary_path.with_suffix(f"{summary_path.suffix}.tmp")
     fieldnames = (
         "case", "input_path", "model_preset", "model_name", "text", "text_full", "text_source", "comparison_type",

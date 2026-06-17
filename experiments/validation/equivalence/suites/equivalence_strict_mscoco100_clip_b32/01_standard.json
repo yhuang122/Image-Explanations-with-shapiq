@@ -13,9 +13,7 @@
     "pointing_game_banzhaf",
     "pointing_game_shapley",
     "explain_mscoco",
-    "insertion_deletion_siglip",
-    "pointing_game_crossmodal",
-    "explain_mscoco_siglip"
+    "insertion_deletion_siglip"
   ],
   "inputs": [
     "data/input/wds_mscoco_captions_test_100"

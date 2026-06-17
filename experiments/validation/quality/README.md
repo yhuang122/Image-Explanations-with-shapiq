@@ -39,7 +39,7 @@ image + text + model + segmenter + masker
 -> write CSV and plots
 ```
 
-## Files
+## Structure
 
 | File | Purpose |
 |---|---|
@@ -83,12 +83,13 @@ benchmark_suite.aid_preview_assets.json
 Planned run count:
 
 ```text
-2 images * 2 models * 4 strategies * 2 methods = 32 runs
+2 images * 2 models * 18 strategies * 2 methods = 144 runs
 ```
 
 This suite is intended for fast visual inspection. It uses `assets/dog_and_hydrant.jpg` and
-`assets/giraffe_drinking.jpg`, compares CLIP and SigLIP, and includes representative patch, SLIC,
-and gradient-guided strategies. It does not replace the full coverage suite.
+`assets/giraffe_drinking.jpg`, compares CLIP and SigLIP, and covers the benchmark-supported
+3 segmenter * 6 masker strategy grid with two lightweight preview methods. It does not replace the
+100-image full coverage suite.
 
 ### Full Coverage Suite
 
@@ -121,7 +122,7 @@ Default runtime parameters:
 |---|---:|
 | `batch_size` | 64 |
 | `curve_points` | 101 |
-| `budget` | 4096 per method |
+| `budget` | Explanation budget, 4096 per method |
 | `cuda` | true |
 | `use_amp` | false |
 | `text_column` | `first_caption` |
@@ -133,13 +134,13 @@ hidden from the main config.
 
 Run from the repository root with the project environment activated.
 
-Preview the 32-run plan without loading models:
+Preview the 144-run plan without loading models:
 
 ```powershell
 python .\experiments\validation\quality\benchmark_aid.py --config .\experiments\validation\quality\benchmark_suite.aid_preview_assets.json --dry-run
 ```
 
-Run the 32-run preview benchmark:
+Run the 144-run preview benchmark:
 
 ```powershell
 python .\experiments\validation\quality\benchmark_aid.py --config .\experiments\validation\quality\benchmark_suite.aid_preview_assets.json
@@ -159,6 +160,7 @@ python .\experiments\validation\quality\benchmark_aid.py --config .\experiments\
 
 Normal runs print the planned run summary first, save it under `metadata/`, and then start
 execution. Interrupted runs resume automatically from completed rows in `aid_summary.csv`.
+Stale failed rows are dropped before resuming, so fixed combinations are retried cleanly.
 
 Use `--force` only when the whole suite should be recomputed:
 
@@ -168,7 +170,7 @@ python .\experiments\validation\quality\benchmark_aid.py --config .\experiments\
 
 ## Plot
 
-The benchmark writes plots automatically at the end of a full run.
+Plots are generated from existing CSVs. A full benchmark run also refreshes plots at the end.
 
 Regenerate plots from existing CSV files without rerunning explanations:
 
@@ -190,7 +192,7 @@ python .\experiments\validation\quality\plot_fixlip_qualitative.py --summary .\e
 
 This qualitative plot reuses `ImputerFactory.plot.plot_image_and_text_together`.
 
-## Outputs
+## Results
 
 ```text
 experiments/validation/quality/results/benchmark_aid_clip_siglip_mscoco100/
@@ -209,8 +211,8 @@ experiments/validation/quality/results/benchmark_aid_clip_siglip_mscoco100/
     quality_aid_score_mean_std.png
     quality_aid_quality_runtime_tradeoff.png
     quality_aid_coverage_table.png
-    quality_aid_mean_deletion_curves_<model>_<strategy>.png
-    quality_aid_sample_curves_<model>_<strategy>_<method>.png
+    quality_aid_mean_deletion_curves_<short_context>_<hash>.png
+    quality_aid_sample_curves_<short_context>_<hash>.png
     qualitative/
       <run_id>_fixlip_paper_style.png
 ```
@@ -235,17 +237,16 @@ plots when they are useful for reporting.
 
 | Plot | Meaning |
 |---|---|
-| `quality_aid_score_mean_std.png` | Mean AID score with standard deviation by model, strategy, and method. |
-| `quality_aid_quality_runtime_tradeoff.png` | Mean AID quality versus explanation runtime. |
-| `quality_aid_coverage_table.png` | Completed, failed, and success-rate summary. |
-| `quality_aid_mean_deletion_curves_<model>_<strategy>.png` | Mean deletion curves grouped by model and strategy. |
-| `quality_aid_sample_curves_<model>_<strategy>_<method>.png` | Teammate-style sample curve grid for direct visual inspection. |
+| `quality_aid_score_mean_std.png` | Mean AID score with standard deviation by model, segmenter, masker, method, and explanation budget. |
+| `quality_aid_quality_runtime_tradeoff.png` | Explanation runtime by benchmark combination, with color showing mean AID quality. |
+| `quality_aid_coverage_table.png` | Completed, failed, and success-rate summary by model, segmenter, masker, method, and explanation budget. |
+| `quality_aid_mean_deletion_curves_<short_context>_<hash>.png` | Mean deletion curves grouped by model and strategy. The short hash keeps filenames stable and Windows-safe. |
+| `quality_aid_sample_curves_<short_context>_<hash>.png` | Teammate-style sample curve grid for direct visual inspection. Full model, strategy, method, and budget remain in CSV and plot titles. |
 | `qualitative/<run_id>_fixlip_paper_style.png` | FIxLIP paper-style image/text interaction visualization for one run. |
 
 ## Known Limitations
 
 - AID measures deletion-curve explanation quality, not old-vs-new numerical equivalence.
 - The 14400-run suite is large and is better suited for a server when all curves are required.
-- Current quality coverage includes all benchmark-supported segmenters and maskers. If a specific
-  combination fails, keep the failed row in the summary first; that failure is useful strategy
-  compatibility evidence.
+- Current quality coverage includes all benchmark-supported segmenters and maskers. Failed
+  combinations are recorded in the current run summary and retried on the next resumed run.
