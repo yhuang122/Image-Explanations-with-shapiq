@@ -102,14 +102,14 @@ class ImageImputerFactory:
         segmenter_config.n_channels = n_channels
         segmenter_config.n_players_text = n_players_text
         segmenter_config.text_total_length = text_total_length
+
+        # ── 5. Create Segmenter (per-strategy dispatch) ──────────────────
+        strategy = segmenter_config.strategy
         # Patch-specific enrichment
         if strategy == "patch":
             segmenter_config.patch_size = patch_size
             segmenter_config.grid_size = grid_size
             segmenter_config.n_players_image = grid_size ** 2 if is_vit else 0
-
-        # ── 5. Create Segmenter (per-strategy dispatch) ──────────────────
-        strategy = segmenter_config.strategy
         if strategy == "slic":
             segmenter = self._create_segmenter(
                 segmenter_config, image_array=input_image,
