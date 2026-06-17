@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram name="ImputerFactory Data Flow" id="0">
-        <mxGraphModel dx="1346" dy="786" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+        <mxGraphModel dx="1651" dy="1139" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -21,6 +21,9 @@
                         <mxPoint x="460" y="114.83000000000001" as="sourcePoint"/>
                         <mxPoint x="550" y="114.83000000000001" as="targetPoint"/>
                     </mxGeometry>
+                </mxCell>
+                <mxCell id="legend" value="&lt;b&gt;Legend&lt;/b&gt;&lt;br&gt;━━━ Pipeline data flow&lt;br&gt;╌╌╌ Object reference / detail expansion" style="text;html=1;fontSize=11;fillColor=none;strokeColor=none;fontColor=#666666;align=left;" parent="s1-bg" vertex="1">
+                    <mxGeometry x="800" y="15" width="250" height="55" as="geometry"/>
                 </mxCell>
                 <mxCell id="s1-title" value="&lt;b&gt;PIPELINE OVERVIEW&lt;/b&gt;&lt;br&gt;From coalition encoding to Shapley values" style="text;html=1;fontSize=10;fillColor=none;strokeColor=none;fontColor=#7a8ba8;align=left;" parent="1" vertex="1">
                     <mxGeometry x="65" y="62" width="350" height="30" as="geometry"/>
@@ -126,15 +129,6 @@
                             <mxPoint x="756" y="500"/>
                         </Array>
                     </mxGeometry>
-                </mxCell>
-                <mxCell id="batch-title" value="&lt;b&gt;Batch Processing Loop (inside ImageImputer)&lt;/b&gt;" style="text;html=1;fontSize=14;fillColor=none;strokeColor=none;fontColor=#1a1a2e;" parent="1" vertex="1">
-                    <mxGeometry x="50" y="695" width="500" height="25" as="geometry"/>
-                </mxCell>
-                <mxCell id="batch-loop" value="&lt;b&gt;For each batch:&lt;/b&gt;&lt;br&gt;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━&lt;br&gt;1. &lt;b&gt;_repeat_inputs()&lt;/b&gt; — broadcast the 1‑sample ProcessorOutput to batch_size&lt;br&gt;2. &lt;b&gt;Segmenter.generate_masks()&lt;/b&gt; — convert coalition slice → PhysicalMask&lt;br&gt;3. &lt;b&gt;Masker.apply()&lt;/b&gt; — apply PhysicalMask to broadcast inputs&lt;br&gt;4. &lt;b&gt;model(**masked_inputs)&lt;/b&gt; — run VLM forward under torch.no_grad()&lt;br&gt;5. &lt;b&gt;_extract_diagonal()&lt;/b&gt; — pull logits, accumulate, return np.array" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf8f0;strokeColor=#d0c8b0;fontSize=11;align=left;" parent="1" vertex="1">
-                    <mxGeometry x="50" y="730" width="1070" height="110" as="geometry"/>
-                </mxCell>
-                <mxCell id="legend" value="&lt;b&gt;Legend&lt;/b&gt;&lt;br&gt;━━━ Pipeline data flow&lt;br&gt;╌╌╌ Object reference / detail expansion" style="text;html=1;fontSize=11;fillColor=none;strokeColor=none;fontColor=#666666;align=left;" parent="1" vertex="1">
-                    <mxGeometry x="600" y="695" width="250" height="55" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>
