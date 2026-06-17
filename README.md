@@ -4,9 +4,34 @@ Modular vision-language model explanation pipeline built on **shapiq** + **fixli
 Pluggable Segmenters (patch, SLIC, gradient-guided) × Maskers (mean, blur, attention)
 → Shapley-interaction explanations for CLIP / SigLIP.
 
+## Environment Setup
+
+### Option A: uv (recommended)
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync
+source .venv/bin/activate
+uv pip install "git+https://github.com/yhuang122/Image-Explanations-with-shapiq.git@shapiq_dev"
+```
+
+### Option B: conda (for experiment reproduction)
+
+```bash
+conda env create -f environment.yml
+conda activate shapiq_demo
+```
+
+Legacy conda env (upstream shapiq, for reference): `../fixlip/env_faster.yml`.
+
+---
+
 ## Quick Start
 
 ```python
+import sys
+sys.path.insert(0, ".")
+
 from shapiq.imputer.vision import VisionImputerFactory, VisionLanguageGame
 
 factory = VisionImputerFactory()

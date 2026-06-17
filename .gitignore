@@ -1,17 +1,14 @@
-.ipynb_checkpoints/
+# ── Project-specific ──────────────────────────────────────────────
 .jupyter/
-**.DS_Store
-
-# local examples and test data
-examples/
-data/demo_dog.jpg
-experiments/wandb
-results/openai/clip-vit-base-patch16/
-results_1000/
-results_siglip/
-results_v2/
 wandb/
-test.ipynb
+
+# ── Validation outputs ────────────────────────────────────────────
+experiments/validation/equivalence/results/**/csv/
+experiments/validation/quality/results/**/csv/
+experiments/validation/quality/results/**/interaction_values/
+experiments/validation/equivalence/results/**/metadata/
+experiments/validation/quality/results/**/metadata/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -91,8 +88,6 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-
-# IPython
 profile_default/
 ipython_config.py
 
@@ -194,9 +189,3 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# Validation benchmark CSV outputs
-experiments/validation/equivalence/results/**/csv/
-experiments/validation/quality/results/**/csv/
-experiments/validation/quality/results/**/interaction_values/
-experiments/validation/equivalence/results/**/metadata/
-experiments/validation/quality/results/**/metadata/
