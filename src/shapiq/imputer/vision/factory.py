@@ -107,6 +107,12 @@ class VisionImputerFactory:
         if strategy == "slic":
             segmenter_kwargs.setdefault("image_array", input_image)
             segmenter = self._create_segmenter(segmenter_config, **segmenter_kwargs)
+        elif strategy == "gradient_guided":
+            segmenter_kwargs.setdefault("model", model)
+            segmenter_kwargs.setdefault("processor", processor)
+            segmenter_kwargs.setdefault("image", input_image)
+            segmenter_kwargs.setdefault("text", input_text)
+            segmenter = self._create_segmenter(segmenter_config, **segmenter_kwargs)
         else:
             segmenter = self._create_segmenter(segmenter_config, **segmenter_kwargs)
 
