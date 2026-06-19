@@ -149,10 +149,90 @@ CLIP ViT-B/32 + PatchSegmenter + CrossModalMeanMasker — full pipeline.
 ![example_fixlip](data/report_pictures/example_fixlip.png)
 
 ### `example_slic.ipynb`
-CLIP ResNet + SLICSegmenter — perceptual superpixels for CNN backbones.
+
+**SLICSegmenter — CLIP-ResNet validation.** ViT CLIP uses a rigid square patch grid,
+but CNN backbones (CLIP-ResNet) do not. For these, the image is split into SLIC
+superpixels and each superpixel becomes one image player. This notebook validates that
+`VisionImputerFactory` auto-detects the CNN backbone and routes it to the SLIC segmenter.
+
+| Setting | Value |
+|---|---|
+| Model | CLIP ResNet-50 (`openai/clip-rn50`, via OpenAI-CLIP adapter) |
+| Image / text | `assets/dog_and_hydrant.png` / "black dog next to a yellow hydrant" |
+| Segmenter | `slic`, `SlicParams(n_segments=64)` → 42 superpixels |
+| Masker | `crossmodal_mean` (default) |
+
+```python
+from shapiq.imputer.vision import VisionImputerFactory, SegmenterConfig, SlicParams
+
+factory = VisionImputerFactory()
+seg_cfg = SegmenterConfig(strategy="slic", slic=SlicParams(n_segments=64))
+imputer = factory.build(model, processor, image, text, segmenter_config=seg_cfg)
+# imputer.layout.patch_size == 0  → CNN path; image players are SLIC superpixels
+```
+
+**Validation result.** The factory detects the model as `clip` with `patch_size == 0`,
+builds a SLIC layout, keeps the label map on CPU and scatters masks to the model device
+without crashing, and runs the full FIxLIP/AID pipeline.
+
+| Model | n superpixels | Empty | Full | AID ↑ | Peak mem |
+|---|---:|---:|---:|---:|---:|
+| CLIP ResNet-50 | 42 | 15.5 | 29.77 | 0.612 | 0.27 GB |
+
+The notebook produces two figures: the SLIC superpixel boundaries (showing the
+content-adaptive, non-grid layout) and the full image+text Shapley-interaction
+explanation mapped through the superpixel layout.
+
+![example_slic](data/report_pictures/example_slic.png)
 
 ### `example_blur.ipynb`
-VisionBlurMasker — Gaussian blur occlusion (CPU skimage).
+
+**VisionBlurMasker — Gaussian-blur occlusion.** Compares two cross-modal occlusion
+strategies on the same model: the default **mean** masker (multiplicative zero-out)
+vs. the **blur** masker, which replaces masked regions with a Gaussian-blurred copy
+(`skimage.filters.gaussian`, per channel on CPU) and blends
+`output = original * mask + blurred * (1 - mask)`.
+
+| Setting | Value |
+|---|---|
+| Model | CLIP ViT-B/32 (`openai/clip-vit-base-patch32`) |
+| Image / text | `assets/dog_and_hydrant.png` / "black dog next to a yellow hydrant" |
+| Segmenter | patch (49 image players + 8 text players) |
+| Maskers compared | `crossmodal_mean` vs `crossmodal_blur`, `VisionBlurParams(sigma=3.0)` |
+| Approximator | FIxLIP, Banzhaf, max_order=2, budget `2**18` |
+
+```python
+from shapiq.imputer.vision import (
+    VisionImputerFactory, MaskerConfig, VisionBlurParams,
+)
+
+factory = VisionImputerFactory()
+masker_cfg = MaskerConfig(
+    strategy="crossmodal_blur",                 # composite, NOT image-only "vision_blur"
+    vision_blur=VisionBlurParams(sigma=3.0),
+)
+imputer = factory.build(model, processor, image, text, masker_config=masker_cfg)
+```
+
+> **Use `crossmodal_blur`, not `vision_blur`, for cross-modal games.** `vision_blur`
+> only touches `pixel_values` and leaves the text un-masked, yielding meaningless text
+> attributions. `crossmodal_blur` pairs Gaussian image blur with text-attention masking,
+> so it differs from the mean baseline *only* on the image side — a fair comparison.
+
+**Results.** Both maskers agree on the single most important patch (#36), but blur is a
+softer perturbation: removing one patch drops the score less than zero-out does.
+
+| Masker | Empty | Full | Max single-patch drop | Top patch | Compute time |
+|---|---:|---:|---:|---:|---:|
+| `crossmodal_mean` | 22.87 | 33.95 | 0.5466 | 36 | 18.1 s |
+| `crossmodal_blur` (σ=3.0) | 21.52 | 33.95 | 0.4997 | 36 | 31.4 s |
+
+Blur costs ~1.7× more compute (CPU Gaussian convolution per coalition). The image-player
+attributions of the two maskers are strongly correlated (see scatter panel in the
+notebook), confirming blur is a drop-in alternative that yields consistent explanations
+with gentler edits.
+
+![example_blur](data/report_pictures/example_blur.png)
 
 ### `example_gradient_guided.ipynb`
 GradientGuidedSegmenter — saliency-guided non-uniform layout.
