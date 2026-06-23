@@ -134,7 +134,7 @@
 | # | Feature | Details | Priority | Status |
 |---|---|---|---|---|
 | B2.1 | `SLICSegmenter` | CPU: skimage SLIC → 2D index map. GPU: scatter coalition bits via index map | **High** | ✅ Done
-| B2.2 | `GradientGuidedSegmenter` | Future exploration: gradient map → skimage watershed → non-uniform static layout | 🔬 Future | 🔄 In Progress |
+| B2.2 | `GradientGuidedSegmenter` | Future exploration: gradient map → skimage watershed → non-uniform static layout | 🔬 Future | ✅ Done |
 
 #### B2a. SLICSegmenter — CLIP-ResNet Validation
 
