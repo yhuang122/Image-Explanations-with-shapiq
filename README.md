@@ -290,7 +290,61 @@ SigLIP model support — see Reproducibility Note above.
 Batch-size tuning and performance profiling.
 
 ### `example_attention_masker.ipynb`
-AttentionMasker — self-attention -inf injection.
+
+**AttentionMasker — self-attention -inf injection for latent-space occlusion.**
+
+VisionMeanMasker zeroes out pixel regions before the encoder, so the model sees black
+blocks — an out-of-distribution signal. AttentionMasker instead injects `-inf` into the
+self-attention scores of the CLIP vision encoder's 12 transformer layers *before*
+softmax, so masked patches cannot be attended to in latent space. This is closer to
+true feature removal.
+
+| Setting | Value |
+|---|---|
+| Model | CLIP ViT-B/32 (`openai/clip-vit-base-patch32`, `attn_implementation="eager"`) |
+| Image / text | `assets/dog_and_hydrant.png` / "black dog next to a yellow hydrant" |
+| Segmenter | patch (49 image players + 8 text players) |
+| Maskers compared | `vision_mean` (baseline) vs `attention` |
+| Extra | 4 MSCOCO images for multi-image validation |
+
+```python
+from shapiq.imputer.vision import VisionImputerFactory, MaskerConfig
+
+# Two separate model instances with eager attention
+model_mean = CLIPModel.from_pretrained("openai/clip-vit-base-patch32",
+                                        attn_implementation="eager").to("cuda")
+model_attn = CLIPModel.from_pretrained("openai/clip-vit-base-patch32",
+                                        attn_implementation="eager").to("cuda")
+
+factory = VisionImputerFactory()
+imputer_attn = factory.build(model_attn, processor, image, text,
+                              masker_config=MaskerConfig(strategy="attention"))
+# Factory passes `model` → AttentionMasker._setup() → 12 pre-hooks registered
+```
+
+> **Use `attn_implementation="eager"`, not the default SDPA.** Flash Attention and
+> `sdpa` skip custom `attention_mask` tensors injected via hooks. Eager attention
+> applies the modified mask faithfully. Also, use **separate model instances** for
+> each imputer — a single shared model causes hook contamination between maskers.
+
+**Design.** `AttentionMasker._setup(model)` registers 12 forward pre-hooks — one per
+ViT encoder layer — via `layer.self_attn.register_forward_pre_hook(hook_fn,
+with_kwargs=True)`. At inference, `apply()` converts a pixel mask to per-patch means,
+finds masked patch IDs, and builds a `(1, 1, 50, 50)` bias tensor with `-inf` at
+those key positions. When `model.forward()` runs, each pre-hook adds the bias to
+`causal_attention_mask` before softmax. After `exp(-inf) = 0`, masked patches receive
+zero attention weight. **Only the KEY dimension is masked** — masking both key and
+query causes `exp(all -inf) = 0/0 = NaN`, producing an all-white heatmap.
+
+**Results.** Both maskers produce identical full-image logit similarity (33.95) —
+no patches masked, no -inf injected. VisionMean produces meaningful per-patch
+variation; AttentionMasker applies occlusion in latent self-attention rather than at
+the pixel input, yielding a different occlusion pattern across the 7×7 grid.
+
+The notebook produces a 3-panel per-patch occlusion heatmap (original + VisionMean +
+Attention), plus a 2×3 summary grid across dog & hydrant + 4 MSCOCO images.
+
+![example_attention_masker](data/report_pictures/example_attention_masker.png)
 
 ### `insertion_deletion.ipynb`
 AID curve computation and plotting.
