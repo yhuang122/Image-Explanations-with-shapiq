@@ -235,7 +235,53 @@ with gentler edits.
 ![example_blur](data/report_pictures/example_blur.png)
 
 ### `example_gradient_guided.ipynb`
-GradientGuidedSegmenter — saliency-guided non-uniform layout.
+
+**GradientGuidedSegmenter — saliency-guided non-uniform superpixel layout.**
+
+Instead of a rigid 7×7 patch grid, GradientGuidedSegmenter uses CLIP pixel gradients
+to build a saliency map, then clusters superpixels via SLIC on that map — high-saliency
+regions get finer segmentation, background gets coarser. This notebook validates the
+pipeline on a CNN backbone (CLIP ResNet-50) where pixel gradients carry genuine spatial
+variation.
+
+| Setting | Value |
+|---|---|
+| Model | CLIP ResNet-50 (`openai/clip-rn50`, via OpenAI-CLIP adapter) |
+| Image / text | `assets/dog_and_hydrant.png` / "black dog next to a yellow hydrant" |
+| Segmenter | `gradient_guided` → saliency from `\|grad\|.mean(channels)` → SLIC |
+| Masker | `crossmodal_mean` (default) |
+
+```python
+from shapiq.imputer.vision import VisionImputerFactory, SegmenterConfig
+from shapiq.imputer.vision import VisionLanguageGame
+
+factory = VisionImputerFactory()
+imputer = factory.build(
+    model, processor, image, text,
+    segmenter_config=SegmenterConfig(strategy="gradient_guided"),
+)
+game = VisionLanguageGame(imputer, batch_size=64)
+# n_players_image=34 (SLIC superpixels) vs 49 (rigid patch grid)
+```
+
+**Algorithm.** Forward pass + `backward()` on image-text similarity → per-pixel
+gradient `\|grad\|.mean(channels)` → saliency map → `skimage.segmentation.slic()`
+on saliency → region labels → `coalitions[:, region_map]` → image masks.
+
+**Validation result.** The gradient-guided pipeline passes forward+backward and SLIC
+region building without errors. The saliency map reflects image regions that matter for
+the text prompt; SLIC clusters these into content-adaptive superpixels. FIxLIP runs to
+completion on the 42-player game.
+
+| Model | n image players | n text players | Baseline | Budget | Top singleton |
+|---:|---:|---:|---:|---:|---:|
+| CLIP ResNet-50 | 34 | 8 | 1.28 | 2¹⁸ | 3.10 (player 39) |
+
+The notebook produces three diagnostic panels: original image, gradient saliency map
+(heatmap), and SLIC region boundaries overlaid on the image — plus the full image+text
+Shapley-interaction explanation via `plot_slicimage_and_text_together`.
+
+![example_gradient_guided](data/report_pictures/example_gradient_guided.png)
 
 ### `example_siglip_updated.ipynb`
 SigLIP model support — see Reproducibility Note above.
@@ -243,7 +289,7 @@ SigLIP model support — see Reproducibility Note above.
 ### `example_faster.ipynb`
 Batch-size tuning and performance profiling.
 
-### `attention_masker_demo.ipynb`
+### `example_attention_masker.ipynb`
 AttentionMasker — self-attention -inf injection.
 
 ### `insertion_deletion.ipynb`
