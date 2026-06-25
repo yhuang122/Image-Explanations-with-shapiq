@@ -4,6 +4,23 @@ Modular vision-language model explanation pipeline built on **shapiq** + **fixli
 Pluggable Segmenters (patch, SLIC, gradient-guided) × Maskers (mean, blur, attention)
 → Shapley-interaction explanations for CLIP / SigLIP.
 
+## Overall Design
+
+### Architecture
+
+![ImputerFactory Architecture](artifacts/ImputerFactory-Architecture.png)
+
+`VisionImputerFactory` auto-detects the model backbone (ViT vs. CNN), selects a matching
+Segmenter, assembles a Masker chain, and wires them into a `VisionImputer` — the
+orchestration engine that drives coalition masking and forward passes.
+
+### Data Flow
+
+![ImputerFactory Data Flow](artifacts/ImputerFactory-DataFlow.png)
+
+From a single (image, text) pair through segment layout → mask generation → batched
+coalition inference → similarity logits → shapiq Game → Shapley-interaction explanation.
+
 ## Environment Setup
 
 ### conda

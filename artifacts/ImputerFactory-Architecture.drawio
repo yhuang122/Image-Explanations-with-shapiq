@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram name="ImputerFactory Architecture" id="0">
-        <mxGraphModel dx="1651" dy="1139" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+        <mxGraphModel dx="1190" dy="786" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -175,16 +175,17 @@
                         <mxPoint y="-1" as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="ar-fac-seg" value="&lt;span style=&quot;text-wrap-mode: wrap;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Segmenter&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;text-wrap-mode: wrap;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Instance&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.55;exitY=0.001;exitDx=0;exitDy=0;fontSize=8;strokeColor=light-dark(#82b366, #996500);fontColor=default;exitPerimeter=0;entryX=0.72;entryY=0.996;entryDx=0;entryDy=0;entryPerimeter=0;labelBackgroundColor=none;" parent="1" source="l4-seg-label" target="l3-factory" edge="1">
+                <mxCell id="ar-fac-seg" value="&lt;span style=&quot;text-wrap-mode: wrap;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Segmenter&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;text-wrap-mode: wrap;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Instance&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=8;strokeColor=default;fontColor=default;entryX=0.72;entryY=0.996;entryDx=0;entryDy=0;entryPerimeter=0;labelBackgroundColor=none;exitX=0.55;exitY=0.003;exitDx=0;exitDy=0;exitPerimeter=0;curved=0;" parent="1" source="l4-seg-label" target="l3-factory" edge="1">
                     <mxGeometry x="-0.3511" relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="321" y="650"/>
                             <mxPoint x="320" y="650"/>
                         </Array>
                         <mxPoint as="offset"/>
+                        <mxPoint x="290" y="600" as="sourcePoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="ar-fac-msk" value="&lt;span style=&quot;scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); white-space: normal;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Masker&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); white-space: normal;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Instance&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=8;strokeColor=light-dark(#b85450, #996500);fontColor=default;labelBackgroundColor=none;exitX=0.063;exitY=0.021;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="l4-msk-label" target="l3-factory" edge="1">
+                <mxCell id="ar-fac-msk" value="&lt;span style=&quot;scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); white-space: normal;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Masker&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); white-space: normal;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Instance&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=8;strokeColor=default;fontColor=default;labelBackgroundColor=none;exitX=0.065;exitY=0.003;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="l4-msk-label" target="l3-factory" edge="1">
                     <mxGeometry x="-0.8151" relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="617" y="600"/>
