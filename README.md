@@ -73,7 +73,7 @@ occlusion?
 |---|---:|---:|---:|---:|---:|
 | CLIP ViT-B/32 | patch | crossmodal_mean | — | — | — |
 
-![faithfulness](data/report_pictures/faithfulness.png)
+<img src="data/report_pictures/faithfulness.png" width="400" alt="faithfulness">
 
 ---
 
@@ -88,7 +88,7 @@ Area under the insertion/deletion curve — higher is better.
 |---|---:|---:|---:|---:|---:|
 | CLIP ViT-B/32 | patch | crossmodal_mean | — | — | — |
 
-![aid_clip](data/report_pictures/insertion_deletion_clip.png)
+<img src="data/report_pictures/insertion_deletion_clip.png" width="400" alt="aid_clip">
 
 #### SigLIP
 
@@ -96,7 +96,7 @@ Area under the insertion/deletion curve — higher is better.
 |---|---:|---:|--|
 | SigLIP base-patch16 | patch | crossmodal_mean | — |
 
-![aid_siglip](data/report_pictures/insertion_deletion_siglip.png)
+<img src="data/report_pictures/insertion_deletion_siglip.png" width="400" alt="aid_siglip">
 
 ---
 
@@ -126,7 +126,7 @@ image region most responsible for the prediction?
 |---|---:|---:|
 | CLIP ViT-B/32 | patch | — |
 
-![pointing_game](data/report_pictures/pointing_game.png)
+<img src="data/report_pictures/pointing_game.png" width="400" alt="pointing_game">
 
 ---
 
@@ -137,11 +137,16 @@ Example Shapley-interaction explanations on real images.
 | Script | `experiments/migrated/explain_mscoco.py` (CLIP) / `*_siglip.py` |
 |---|---|
 
-![mscoco_clip](data/report_pictures/mscoco_clip.png)
-
-#### SigLIP
-
-![mscoco_siglip](data/report_pictures/mscoco_siglip.png)
+<table>
+<tr>
+  <td align="center"><b>CLIP ViT-B/32</b></td>
+  <td align="center"><b>SigLIP base-patch16</b></td>
+</tr>
+<tr>
+  <td><img src="data/report_pictures/mscoco_clip.png" width="380" alt="mscoco_clip"></td>
+  <td><img src="data/report_pictures/mscoco_siglip.png" width="380" alt="mscoco_siglip"></td>
+</tr>
+</table>
 
 ---
 
