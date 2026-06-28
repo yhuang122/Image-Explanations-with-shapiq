@@ -68,7 +68,6 @@ shapiq/imputer/vision/
 | Component | Reason |
 |---|---|
 | `GradientGuidedSegmenter` | Not validated |
-| `AdaptiveSegmenter` / `HybridSegmenter` | Not implemented / out of scope |
 | `AttentionMasker` | Stub, incomplete |
 | `TorchOps` / `JAXOps` | PyTorch-only for now; JAX out of scope |
 | `FIxLIP` approximator | Project-specific |

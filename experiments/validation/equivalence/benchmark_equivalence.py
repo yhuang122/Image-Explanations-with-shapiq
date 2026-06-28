@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING
@@ -21,7 +23,9 @@ from benchmark_outputs import (
     read_existing_report,
     suite_output_dir,
     write_benchmark_summary,
+    write_failure_result,
     write_original_summary,
+    write_run_metadata,
     write_results,
 )
 from benchmark_schema import (
@@ -34,12 +38,12 @@ from benchmark_schema import (
     SEGMENTER_CHOICES,
 )
 from benchmark_suite import (
-    build_suite,
+    DEFAULT_VISION_BLUR_SIGMA,
+    build_suites,
     describe_suite,
     resolve_input_samples,
     resolve_model_case,
     runtime_args,
-    suite_output_name,
 )
 
 
@@ -51,17 +55,45 @@ if TYPE_CHECKING:
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
+LOCAL_SRC_PACKAGE = "_benchmark_equivalence_local_src"
+LOCAL_SRC_DIR = PROJECT_ROOT / "src"
+
+
+def local_src_module(module_name: str):
+    """Load selected src modules without executing src/__init__.py."""
+    if LOCAL_SRC_PACKAGE not in sys.modules:
+        package = types.ModuleType(LOCAL_SRC_PACKAGE)
+        package.__path__ = [str(LOCAL_SRC_DIR)]
+        sys.modules[LOCAL_SRC_PACKAGE] = package
+
+    full_name = f"{LOCAL_SRC_PACKAGE}.{module_name}"
+    if full_name in sys.modules:
+        return sys.modules[full_name]
+
+    module_path = LOCAL_SRC_DIR / f"{module_name}.py"
+    spec = importlib.util.spec_from_file_location(full_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load local src module: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[full_name] = module
+    spec.loader.exec_module(module)
+    return module
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run pipeline equivalence and coverage benchmarks.")
     parser.add_argument(
         "--config",
         help=(
-            "JSON benchmark suite config. When set, cases/inputs/models/strategies "
-            "are expanded from the config file."
+            "JSON benchmark suite config file or a folder of JSON sub-suites. "
+            "A folder writes all sub-suite results into one shared results folder."
         ),
     )
-    parser.add_argument("--dry-run", action="store_true", help="Print the expanded benchmark plan and exit.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the expanded benchmark plan and exit. Normal runs already print this plan before execution.",
+    )
     parser.add_argument("--force", action="store_true", help="Recompute runs even when result CSVs already exist.")
     parser.add_argument("--case", choices=sorted(CASES), help="Experiment case name.")
     model_group = parser.add_mutually_exclusive_group()
@@ -105,6 +137,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--slic-sigma", type=float, default=0.0)
     parser.add_argument("--gradient-guided-n-segments", type=int)
     parser.add_argument(
+        "--vision-blur-sigma",
+        type=float,
+        default=DEFAULT_VISION_BLUR_SIGMA,
+        help="Gaussian sigma for vision_blur and crossmodal_blur maskers.",
+    )
+    parser.add_argument(
         "--masker-strategy",
         choices=MASKER_CHOICES,
         help="Run one explicit masker strategy instead of the default benchmark suite.",
@@ -130,24 +168,29 @@ def generate_coalitions(n_players: int, num_coalitions: int, random_state: int) 
     return coalitions
 
 
-def build_segmenter_config(spec: dict) -> SegmenterConfig:
+def build_segmenter_config(strategy_spec: dict) -> SegmenterConfig:
     from ImputerFactory import GradientGuidedParams, SegmenterConfig, SlicParams
 
     return SegmenterConfig(
-        strategy=spec["segmenter_strategy"],
+        strategy=strategy_spec["segmenter_strategy"],
         slic=SlicParams(
-            n_segments=spec["slic_n_segments"],
-            compactness=spec["slic_compactness"],
-            sigma=spec["slic_sigma"],
+            n_segments=strategy_spec["slic_n_segments"],
+            compactness=strategy_spec["slic_compactness"],
+            sigma=strategy_spec["slic_sigma"],
         ),
-        gradient_guided=GradientGuidedParams(n_segments=spec["gradient_guided_n_segments"]),
+        gradient_guided=GradientGuidedParams(n_segments=strategy_spec["gradient_guided_n_segments"]),
     )
 
 
-def build_masker_config(spec: dict) -> MaskerConfig:
+def build_masker_config(strategy_spec: dict) -> MaskerConfig:
     from ImputerFactory import MaskerConfig
 
-    return MaskerConfig(strategy=spec["masker_strategy"])
+    config = MaskerConfig(strategy=strategy_spec["masker_strategy"])
+    if strategy_spec["masker_strategy"] == "crossmodal_blur" and "crossmodal_blur_sigma" in strategy_spec:
+        config.vision_blur.sigma = strategy_spec["crossmodal_blur_sigma"]
+    elif "vision_blur_sigma" in strategy_spec:
+        config.vision_blur.sigma = strategy_spec["vision_blur_sigma"]
+    return config
 
 
 def load_model_bundle(case: dict, device: torch.device) -> dict:
@@ -166,10 +209,9 @@ def load_model_bundle(case: dict, device: torch.device) -> dict:
 
 
 def build_original_game(model_bundle: dict, image: Image.Image, text: str, batch_size: int):
-    import src
-
+    game_huggingface = local_src_module("game_huggingface")
     start = perf_counter()
-    old_game = src.game_huggingface.VisionLanguageGame(
+    old_game = game_huggingface.VisionLanguageGame(
         model_bundle["model"],
         model_bundle["processor"],
         input_image=image,
@@ -310,8 +352,8 @@ def summarize_coalition_differences(
 
 def build_benchmark_report(
     *,
-    args: argparse.Namespace,
-    case: dict,
+    run_args: argparse.Namespace,
+    run_config: dict,
     device,
     model_bundle: dict,
     input_context: dict,
@@ -331,28 +373,28 @@ def build_benchmark_report(
     diff_result: dict,
 ) -> dict:
     anchor_diff = np.abs(original_anchor_values - new_anchor_values)
-    strict_equivalence = is_strict_equivalence_run(case, coalition_comparison_available)
+    strict_equivalence = is_strict_equivalence_run(run_config, coalition_comparison_available)
     report = {
-        "case": args.case,
-        "strategy_name": case["strategy_name"],
+        "case": run_args.case,
+        "strategy_name": run_config["strategy_name"],
         "original_pipeline": ORIGINAL_PIPELINE,
         "migrated_pipeline": MIGRATED_PIPELINE,
-        "comparison_type": case["comparison_type"],
+        "comparison_type": run_config["comparison_type"],
         "comparison_mode": comparison_mode,
-        **comparison_scope(case, coalition_comparison_available),
-        "input_path": str(case["input_path"]),
-        "model_preset": case["model_preset"],
-        "model_name": case["model_name"],
+        **comparison_scope(run_config, coalition_comparison_available),
+        "input_path": str(run_config["input_path"]),
+        "model_preset": run_config["model_preset"],
+        "model_name": run_config["model_name"],
         "model_type": imputer.model_type,
-        "text": case["text"],
-        "text_full": case["text_full"],
-        "text_source": case["text_source"],
+        "text": run_config["text"],
+        "text_full": run_config["text_full"],
+        "text_source": run_config["text_source"],
         "device": str(device),
-        "use_amp": bool(case["use_amp"]),
-        "segmenter_strategy": case["segmenter_config"].strategy,
-        "segmenter_params": compact_json(active_params(case["segmenter_config"])),
-        "masker_strategy": case["masker_config"].strategy,
-        "masker_params": compact_json(active_params(case["masker_config"])),
+        "use_amp": bool(run_config["use_amp"]),
+        "segmenter_strategy": run_config["segmenter_config"].strategy,
+        "segmenter_params": compact_json(active_params(run_config["segmenter_config"])),
+        "masker_strategy": run_config["masker_config"].strategy,
+        "masker_params": compact_json(active_params(run_config["masker_config"])),
         "image_size": int(imputer.image_size),
         "patch_size": int(imputer.patch_size),
         "grid_size": int(imputer.grid_size),
@@ -364,10 +406,10 @@ def build_benchmark_report(
         "original_n_players_image": int(old_game.n_players_image),
         "original_n_players_text": int(old_game.n_players_text),
         "coalition_comparison_available": bool(coalition_comparison_available),
-        "num_coalitions": int(new_pipeline_values.shape[0]),
-        "batch_size": int(case["batch_size"]),
-        "random_state": int(case["random_state"]),
-        "tolerance": args.tolerance,
+        "num_coalitions": int(run_config["num_coalitions"]),
+        "batch_size": int(run_config["batch_size"]),
+        "random_state": int(run_config["random_state"]),
+        "tolerance": run_args.tolerance,
         "model_load_runtime_s": model_bundle["model_load_runtime_s"],
         "original_game_build_runtime_s": input_context["original_game_build_runtime_s"],
         "migrated_game_build_runtime_s": migrated_game_build_runtime_s,
@@ -385,7 +427,7 @@ def build_benchmark_report(
         "abs_full_coalition_output_diff": float(anchor_diff[1]),
         "empty_full_anchor_max_abs_output_diff": float(np.max(anchor_diff)),
         "empty_full_anchor_mean_abs_output_diff": float(np.mean(anchor_diff)),
-        "empty_full_anchor_passed": bool(np.max(anchor_diff) <= args.tolerance),
+        "empty_full_anchor_passed": bool(np.max(anchor_diff) <= run_args.tolerance),
         **diff_result,
         "strict_equivalence": bool(strict_equivalence),
     }
@@ -395,21 +437,126 @@ def build_benchmark_report(
     return report
 
 
+def infer_model_type(model_name: str) -> str:
+    name = model_name.lower()
+    if "siglip2" in name:
+        return "siglip2"
+    if "siglip" in name:
+        return "siglip"
+    if "clip" in name:
+        return "clip"
+    return "unknown"
+
+
+def model_image_layout(model_bundle: dict) -> dict:
+    embeddings = model_bundle["model"].vision_model.embeddings
+    image_size = int(embeddings.image_size)
+    patch_size = int(embeddings.patch_size)
+    grid_size = image_size // patch_size
+    return {
+        "image_size": image_size,
+        "patch_size": patch_size,
+        "grid_size": grid_size,
+        "n_players_image": grid_size**2,
+    }
+
+
+def build_failure_report(
+    *,
+    run_args: argparse.Namespace,
+    run_config: dict,
+    device,
+    model_bundle: dict,
+    total_start: float,
+    error: Exception,
+) -> dict:
+    layout = model_image_layout(model_bundle)
+    candidate_name = (
+        f"{MIGRATED_PIPELINE}:"
+        f"{run_config['segmenter_config'].strategy}/{run_config['masker_config'].strategy}"
+    )
+    return {
+        "case": run_args.case,
+        "strategy_name": run_config["strategy_name"],
+        "original_pipeline": ORIGINAL_PIPELINE,
+        "migrated_pipeline": MIGRATED_PIPELINE,
+        "comparison_type": run_config["comparison_type"],
+        "comparison_mode": "setup_failure",
+        "comparison_scope": "original_pipeline_incompatible",
+        "reference_name": ORIGINAL_PIPELINE,
+        "candidate_name": candidate_name,
+        "equivalence_expected": False,
+        "metric_family": f"setup_failure:{type(error).__name__}",
+        "input_path": str(run_config["input_path"]),
+        "model_preset": run_config["model_preset"],
+        "model_name": run_config["model_name"],
+        "model_type": infer_model_type(run_config["model_name"]),
+        "text": run_config["text"],
+        "text_full": run_config["text_full"],
+        "text_source": run_config["text_source"],
+        "device": str(device),
+        "use_amp": bool(run_config["use_amp"]),
+        "segmenter_strategy": run_config["segmenter_config"].strategy,
+        "segmenter_params": compact_json(active_params(run_config["segmenter_config"])),
+        "masker_strategy": run_config["masker_config"].strategy,
+        "masker_params": compact_json(active_params(run_config["masker_config"])),
+        "image_size": layout["image_size"],
+        "patch_size": layout["patch_size"],
+        "grid_size": layout["grid_size"],
+        "text_total_length": "",
+        "n_players": "",
+        "n_players_image": "",
+        "n_players_text": "",
+        "original_n_players": "",
+        "original_n_players_image": "",
+        "original_n_players_text": "",
+        "coalition_comparison_available": False,
+        "num_coalitions": int(run_config["num_coalitions"]),
+        "batch_size": int(run_config["batch_size"]),
+        "random_state": int(run_config["random_state"]),
+        "tolerance": run_args.tolerance,
+        "model_load_runtime_s": model_bundle["model_load_runtime_s"],
+        "original_game_build_runtime_s": "",
+        "migrated_game_build_runtime_s": "",
+        "original_anchor_runtime_s": "",
+        "migrated_anchor_runtime_s": "",
+        "build_runtime_s": "",
+        "original_pipeline_runtime_s": "",
+        "migrated_pipeline_runtime_s": "",
+        "total_runtime_s": perf_counter() - total_start,
+        "original_pipeline_empty_coalition_output": "",
+        "migrated_pipeline_empty_coalition_output": "",
+        "abs_empty_coalition_output_diff": "",
+        "original_pipeline_full_coalition_output": "",
+        "migrated_pipeline_full_coalition_output": "",
+        "abs_full_coalition_output_diff": "",
+        "empty_full_anchor_max_abs_output_diff": "",
+        "empty_full_anchor_mean_abs_output_diff": "",
+        "empty_full_anchor_passed": False,
+        "coalition_max_abs_output_diff": "",
+        "coalition_mean_abs_output_diff": "",
+        "benchmark_metric_max_output_diff": "",
+        "benchmark_metric_mean_output_diff": "",
+        "equivalence_passed": False,
+        "passed": False,
+        "strict_equivalence": False,
+    }
+
+
 def run_strategy_comparison(
-    case: dict,
-    args: argparse.Namespace,
+    run_config: dict,
+    run_args: argparse.Namespace,
     device: torch.device,
     model_bundle: dict,
     input_context: dict,
     output_dir: Path,
 ) -> dict:
-    import src
-
+    utils = local_src_module("utils")
     total_start = perf_counter()
-    src.utils.set_seed(case["random_state"])
+    utils.set_seed(run_config["random_state"])
     old_game = input_context["old_game"]
     new_game, imputer, migrated_game_build_runtime_s = build_migrated_game(
-        case, model_bundle, input_context["image"]
+        run_config, model_bundle, input_context["image"]
     )
     coalition_comparison_available = has_matching_player_layout(old_game, new_game)
 
@@ -419,10 +566,10 @@ def run_strategy_comparison(
     new_anchor_runtime_s = perf_counter() - new_anchor_start
 
     if coalition_comparison_available:
-        cache_key = (case["comparison_type"], case["num_coalitions"], case["random_state"])
+        cache_key = (run_config["comparison_type"], run_config["num_coalitions"], run_config["random_state"])
         original_pipeline_cache = input_context.setdefault("original_pipeline_cache", {})
         if cache_key not in original_pipeline_cache:
-            inputs = build_coalition_inputs(old_game, case)
+            inputs = build_coalition_inputs(old_game, run_config)
             original_pipeline_start = perf_counter()
             original_pipeline_cache[cache_key] = {
                 "inputs": inputs,
@@ -435,7 +582,7 @@ def run_strategy_comparison(
         original_pipeline_runtime_s = cached["runtime_s"]
         comparison_mode = "original_pipeline_vs_migrated_pipeline"
     else:
-        inputs = build_coalition_inputs(new_game, case)
+        inputs = build_coalition_inputs(new_game, run_config)
         original_pipeline_runtime_s = None
         old_pipeline_values = None
         comparison_mode = "original_anchor_vs_migrated_pipeline"
@@ -445,8 +592,8 @@ def run_strategy_comparison(
     migrated_pipeline_runtime_s = perf_counter() - migrated_pipeline_start
 
     report = build_benchmark_report(
-        args=args,
-        case=case,
+        run_args=run_args,
+        run_config=run_config,
         device=device,
         model_bundle=model_bundle,
         input_context=input_context,
@@ -463,38 +610,51 @@ def run_strategy_comparison(
         new_anchor_runtime_s=new_anchor_runtime_s,
         new_pipeline_values=new_pipeline_values,
         total_start=total_start,
-        diff_result=summarize_coalition_differences(old_pipeline_values, new_pipeline_values, args.tolerance),
+        diff_result=summarize_coalition_differences(old_pipeline_values, new_pipeline_values, run_args.tolerance),
     )
-    report["result_paths"] = write_results(output_dir, case, report, inputs, old_pipeline_values, new_pipeline_values)
+    report["result_paths"] = write_results(
+        output_dir,
+        run_config,
+        report,
+        inputs,
+        old_pipeline_values,
+        new_pipeline_values,
+    )
     return report
 
 
-def run_original_pipeline(case: dict, model_bundle: dict, input_path: Path, text: str, text_full: str, text_source: str) -> dict:
-    import src
-
+def run_original_pipeline(
+    run_config: dict,
+    model_bundle: dict,
+    input_path: Path,
+    text: str,
+    text_full: str,
+    text_source: str,
+) -> dict:
+    utils = local_src_module("utils")
     total_start = perf_counter()
-    src.utils.set_seed(case["random_state"])
-    input_context = build_original_context(model_bundle, input_path, text, case["batch_size"])
+    utils.set_seed(run_config["random_state"])
+    input_context = build_original_context(model_bundle, input_path, text, run_config["batch_size"])
     old_game = input_context["old_game"]
-    inputs = build_coalition_inputs(old_game, case)
+    inputs = build_coalition_inputs(old_game, run_config)
     original_pipeline_start = perf_counter()
     values = evaluate_game_outputs(old_game, inputs)
     original_pipeline_runtime_s = perf_counter() - original_pipeline_start
     return {
-        "case": case["case"],
+        "case": run_config["case"],
         "input_path": str(input_path),
-        "model_preset": case["model_preset"],
-        "model_name": case["model_name"],
+        "model_preset": run_config["model_preset"],
+        "model_name": run_config["model_name"],
         "text": text,
         "text_full": text_full,
         "text_source": text_source,
-        "comparison_type": case["comparison_type"],
+        "comparison_type": run_config["comparison_type"],
         "n_players": int(old_game.n_players),
         "n_players_image": int(old_game.n_players_image),
         "n_players_text": int(old_game.n_players_text),
         "num_coalitions": int(values.shape[0]),
-        "batch_size": int(case["batch_size"]),
-        "random_state": int(case["random_state"]),
+        "batch_size": int(run_config["batch_size"]),
+        "random_state": int(run_config["random_state"]),
         "model_load_runtime_s": model_bundle["model_load_runtime_s"],
         "original_game_build_runtime_s": input_context["original_game_build_runtime_s"],
         "original_anchor_runtime_s": input_context["original_anchor_runtime_s"],
@@ -506,42 +666,42 @@ def run_original_pipeline(case: dict, model_bundle: dict, input_path: Path, text
     }
 
 
-def build_strategy_case(
-    args: argparse.Namespace,
-    model_case: dict,
+def build_strategy_run_config(
+    run_args: argparse.Namespace,
+    model_config: dict,
     input_path: Path,
-    spec: dict,
+    strategy_spec: dict,
     text_full: str,
     text_source: str,
 ) -> dict:
-    case = dict(model_case)
-    case.update(
-        case=args.case,
+    run_config = dict(model_config)
+    run_config.update(
+        case=run_args.case,
         input_path=input_path,
-        text=args.text,
+        text=run_args.text,
         text_full=text_full,
         text_source=text_source,
-        random_state=args.random_state,
-        num_coalitions=args.num_coalitions,
-        batch_size=args.batch_size,
-        tolerance=args.tolerance,
-        use_amp=args.use_amp,
-        strategy_name=spec["strategy_name"],
-        segmenter_config=build_segmenter_config(spec),
-        masker_config=build_masker_config(spec),
+        random_state=run_args.random_state,
+        num_coalitions=run_args.num_coalitions,
+        batch_size=run_args.batch_size,
+        tolerance=run_args.tolerance,
+        use_amp=run_args.use_amp,
+        strategy_name=strategy_spec["strategy_name"],
+        segmenter_config=build_segmenter_config(strategy_spec),
+        masker_config=build_masker_config(strategy_spec),
     )
-    return case
+    return run_config
 
 
-def build_original_pipeline_case(args: argparse.Namespace, model_case: dict) -> dict:
-    case = dict(model_case)
-    case.update(
-        case=args.case,
-        random_state=args.random_state,
-        num_coalitions=args.num_coalitions,
-        batch_size=args.batch_size,
+def build_original_pipeline_run_config(run_args: argparse.Namespace, model_config: dict) -> dict:
+    run_config = dict(model_config)
+    run_config.update(
+        case=run_args.case,
+        random_state=run_args.random_state,
+        num_coalitions=run_args.num_coalitions,
+        batch_size=run_args.batch_size,
     )
-    return case
+    return run_config
 
 
 def is_failed_strict_report(report: dict) -> bool:
@@ -552,13 +712,14 @@ def run_suite(args: argparse.Namespace, suite: dict, output_dir: Path) -> list[d
     device = resolve_device(bool(suite["defaults"]["cuda"]))
     model_cache = {}
     input_context_cache = {}
+    input_context_error_cache = {}
     reports = []
 
     for case_entry in suite["cases"]:
         case_name = case_entry["name"]
         for model_entry in suite["models"]:
-            model_case = resolve_model_case(case_entry, model_entry)
-            model_key = model_case["model_name"]
+            model_config = resolve_model_case(case_entry, model_entry)
+            model_key = model_config["model_name"]
 
             for input_entry in suite["inputs"]:
                 for sample in resolve_input_samples(input_entry, args.text):
@@ -573,11 +734,11 @@ def run_suite(args: argparse.Namespace, suite: dict, output_dir: Path) -> list[d
                     )
                     if args.run_mode == "original":
                         if model_key not in model_cache:
-                            model_cache[model_key] = load_model_bundle(model_case, device)
+                            model_cache[model_key] = load_model_bundle(model_config, device)
                         model_bundle = model_cache[model_key]
                         reports.append(
                             run_original_pipeline(
-                                build_original_pipeline_case(run_args, model_case),
+                                build_original_pipeline_run_config(run_args, model_config),
                                 model_bundle,
                                 input_path,
                                 text,
@@ -586,44 +747,65 @@ def run_suite(args: argparse.Namespace, suite: dict, output_dir: Path) -> list[d
                             )
                         )
                     else:
-                        for spec in suite["strategies"]:
-                            strategy_case = build_strategy_case(
+                        for strategy_spec in suite["strategies"]:
+                            strategy_run_config = build_strategy_run_config(
                                 run_args,
-                                model_case,
+                                model_config,
                                 input_path,
-                                spec,
+                                strategy_spec,
                                 text_full,
                                 text_source,
                             )
                             existing_report = None if args.force else read_existing_report(
-                                comparison_csv_path(output_dir, strategy_case)
+                                comparison_csv_path(output_dir, strategy_run_config)
                             )
                             if existing_report is not None:
                                 reports.append(existing_report)
                                 continue
 
                             if model_key not in model_cache:
-                                model_cache[model_key] = load_model_bundle(model_case, device)
+                                model_cache[model_key] = load_model_bundle(model_config, device)
                             model_bundle = model_cache[model_key]
                             context_key = (model_key, str(input_path), text, run_args.batch_size)
-                            if context_key not in input_context_cache:
-                                input_context_cache[context_key] = build_original_context(
-                                    model_bundle,
-                                    input_path,
-                                    text,
-                                    run_args.batch_size,
+                            total_start = perf_counter()
+                            try:
+                                if context_key in input_context_error_cache:
+                                    raise input_context_error_cache[context_key]
+                                if context_key not in input_context_cache:
+                                    input_context_cache[context_key] = build_original_context(
+                                        model_bundle,
+                                        input_path,
+                                        text,
+                                        run_args.batch_size,
+                                    )
+                                input_context = input_context_cache[context_key]
+                                reports.append(
+                                    run_strategy_comparison(
+                                        strategy_run_config,
+                                        run_args,
+                                        device,
+                                        model_bundle,
+                                        input_context,
+                                        output_dir,
+                                    )
                                 )
-                            input_context = input_context_cache[context_key]
-                            reports.append(
-                                run_strategy_comparison(
-                                    strategy_case,
-                                    run_args,
-                                    device,
-                                    model_bundle,
-                                    input_context,
+                            except Exception as error:
+                                if context_key not in input_context_cache:
+                                    input_context_error_cache[context_key] = error
+                                failure_report = build_failure_report(
+                                    run_args=run_args,
+                                    run_config=strategy_run_config,
+                                    device=device,
+                                    model_bundle=model_bundle,
+                                    total_start=total_start,
+                                    error=error,
+                                )
+                                failure_report["result_paths"] = write_failure_result(
                                     output_dir,
+                                    strategy_run_config,
+                                    failure_report,
                                 )
-                            )
+                                reports.append(failure_report)
 
                         if device.type == "cuda":
                             import torch
@@ -634,19 +816,42 @@ def run_suite(args: argparse.Namespace, suite: dict, output_dir: Path) -> list[d
 
 def main() -> int:
     args = parse_args()
-    suite = build_suite(args)
-    output_dir = suite_output_dir(suite_output_name(suite))
+    suites, output_name = build_suites(args)
+    output_dir = suite_output_dir(output_name)
+    suite_plans = [describe_suite(suite) for suite in suites]
+    plan = suite_plans[0] if len(suite_plans) == 1 else {
+        "name": output_name,
+        "config_path": args.config,
+        "suite_count": len(suite_plans),
+        "planned_runs": sum(suite_plan["planned_runs"] for suite_plan in suite_plans),
+        "suites": suite_plans,
+    }
     if args.dry_run:
-        print(json.dumps(describe_suite(suite), indent=2))
+        print(json.dumps(plan, indent=2))
         return 0
 
-    reports = run_suite(args, suite, output_dir)
+    print(json.dumps({"benchmark_plan": plan}, indent=2), flush=True)
+    metadata_suite = suites[0] if len(suites) == 1 else {"name": output_name, "suites": suites}
+    metadata_paths = write_run_metadata(output_dir, args, metadata_suite, plan)
+    reports = []
+    for suite in suites:
+        reports.extend(run_suite(args, suite, output_dir))
 
     if args.run_mode == "original":
         result_paths = write_original_summary(output_dir, reports)
-        print(json.dumps({"original_pipeline_runs": len(reports), "result_paths": result_paths}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "original_pipeline_runs": len(reports),
+                    "result_paths": result_paths,
+                    "metadata_paths": metadata_paths,
+                },
+                indent=2,
+            )
+        )
         return 0
     elif len(reports) == 1:
+        reports[0]["metadata_paths"] = metadata_paths
         print(json.dumps(reports[0], indent=2))
     else:
         result_paths = write_benchmark_summary(output_dir, reports)
@@ -657,6 +862,7 @@ def main() -> int:
                     "resumed_runs": sum(1 for report in reports if report.get("_resumed")),
                     "failed_strict_runs": sum(1 for report in reports if is_failed_strict_report(report)),
                     "result_paths": result_paths,
+                    "metadata_paths": metadata_paths,
                 },
                 indent=2,
             )

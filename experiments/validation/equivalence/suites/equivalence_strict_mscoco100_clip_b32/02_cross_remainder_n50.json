@@ -1,0 +1,24 @@
+{
+  "name": "equivalence_strict_cross_remainder_mscoco100_n50",
+  "defaults": {
+    "num_coalitions": 50,
+    "batch_size": 64,
+    "tolerance": 0.0001,
+    "cuda": true,
+    "use_amp": false
+  },
+  "cases": [
+    "pointing_game_crossmodal",
+    "explain_mscoco_siglip"
+  ],
+  "inputs": [
+    "data/input/wds_mscoco_captions_test_100"
+  ],
+  "strategies": [
+    {
+      "name": "patch_crossmodal_mean",
+      "segmenter": "patch",
+      "masker": "crossmodal_mean"
+    }
+  ]
+}

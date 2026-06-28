@@ -1,0 +1,200 @@
+<mxfile host="65bd71144e">
+    <diagram name="ImputerFactory Architecture" id="0">
+        <mxGraphModel dx="1651" dy="1139" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="&lt;b&gt;ImputerFactory — Architecture Overview&lt;/b&gt;" style="text;html=1;fontSize=20;fillColor=none;strokeColor=none;fontColor=#1a1a2e;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="10" width="600" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="l1-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f4f8;strokeColor=#c0cfe0;fontSize=11;container=1;pointerEvents=0;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="55" width="1100" height="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="l1-title" value="&lt;b&gt;APPLICATION LAYER&lt;/b&gt;&#xa;External callers that consume Shapley values" style="text;html=1;fontSize=10;fillColor=none;strokeColor=none;fontColor=#7a8ba8;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="62" width="300" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="l1-shapiq" value="&lt;b&gt;shapiq&lt;/b&gt;&lt;br&gt;Shapley / Banzhaf&lt;br&gt;Interaction Values" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="110" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="l1-scripts" value="&lt;b&gt;Python Scripts&lt;/b&gt;&lt;br&gt;Experiments &amp;amp;&lt;br&gt;Evaluation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="110" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="l1-notebooks" value="&lt;b&gt;Jupyter Notebooks&lt;/b&gt;&lt;br&gt;Interactive&lt;br&gt;Visualization" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="590" y="110" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="l2-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f0f8;strokeColor=#d0c0e0;fontSize=11;container=1;pointerEvents=0;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="215" width="1100" height="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="l2-title" value="&lt;b&gt;ADAPTER LAYER&lt;/b&gt;&lt;br&gt;Thin shapiq integration — no model or GPU access" style="text;html=1;fontSize=10;fillColor=none;strokeColor=none;fontColor=#7a8ba8;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="222" width="350" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="l2-vlg" value="&lt;b&gt;VisionLanguageGame&lt;/b&gt;&lt;br&gt;• Computes empty/full normalization values&lt;br&gt;• Delegates value_function() → ImageImputer&lt;br&gt;• No torch import, no model access" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="260" width="600" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f5fa;strokeColor=#c0d0e8;fontSize=11;container=1;pointerEvents=0;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="375" width="1100" height="215" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3-title" value="&lt;b&gt;CORE PIPELINE LAYER&lt;/b&gt;&lt;br&gt;Assembly, configuration, and orchestration" style="text;html=1;fontSize=10;fillColor=none;strokeColor=none;fontColor=#7a8ba8;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="382" width="195" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3-factory" value="&lt;b&gt;ImageImputerFactory&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="415" width="320" height="162" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3-factory-inner" value="&lt;b&gt;build(model, processor, image, text,&lt;br&gt;segmenter_config, masker_config)&lt;/b&gt;&lt;br&gt;━━━━━━━━━━━━━━━━━━━━&lt;br&gt;1. Inspect model (ViT / CNN)&lt;br&gt;2. Preprocess inputs once&lt;br&gt;3. Enrich configs with model metadata&lt;br&gt;4. Create Segmenter + Masker from config&lt;br&gt;5. Return wired ImageImputer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2e5;strokeColor=#d79b00;fontSize=10;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="105" y="430" width="290" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3-cfg-seg" value="&lt;b&gt;Draft SegmenterConfig&lt;/b&gt;&lt;br&gt;(strategy + params)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="270" y="375" width="110" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3-cfg-msk" value="&lt;b&gt;Draft MaskerConfig&lt;/b&gt;&lt;br&gt;(strategy + params)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="375" width="96" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-cfg-seg-in" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.513;exitY=0.992;exitDx=0;exitDy=0;entryX=0.738;entryY=0.003;entryDx=0;entryDy=0;fontSize=8;strokeColor=#000000;fontColor=#d6b656;fillColor=#000000;dashed=1;entryPerimeter=0;exitPerimeter=0;" parent="1" source="l3-cfg-seg" target="l3-factory" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="326" y="410"/>
+                            <mxPoint x="326" y="410"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-cfg-msk-in" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.902;entryY=0.014;entryDx=0;entryDy=0;fontSize=8;strokeColor=#000000;fontColor=#d6b656;entryPerimeter=0;exitX=0.25;exitY=1;exitDx=0;exitDy=0;dashed=1;" parent="1" source="l3-cfg-msk" target="l3-factory" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="10" y="399" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="414" y="410"/>
+                            <mxPoint x="379" y="410"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="l3-imputer" value="&lt;b&gt;ImageImputer&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="415" width="500" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3-imputer-inner" value="&lt;b&gt;Pipeline Orchestrator&lt;/b&gt;&lt;br&gt;━━━━━━━━━━━━━━━━━━━━&lt;br&gt;• Owns model, processor, preprocessed inputs&lt;br&gt;• Manages batching and device placement&lt;br&gt;• Coordinates: &lt;b&gt;Segmenter → Masker → Model Forward → Extract&lt;/b&gt;&lt;br&gt;• &lt;i&gt;forward_1d(coalitions)&lt;/i&gt; → diagonal logits (N,)&lt;br&gt;• &lt;i&gt;forward_crossmodal(img_coal, txt_coal)&lt;/i&gt; → full matrix (Nᵢ×Nₜ)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#6c8ebf;fontSize=10;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="535" y="442" width="470" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-fac-imp" value="&lt;i&gt;&lt;font style=&quot;font-size: 14px;&quot;&gt;&lt;b&gt;produce&lt;/b&gt;&lt;/font&gt;&lt;/i&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.579;entryDx=0;entryDy=0;fontSize=11;strokeColor=#d79b00;fontColor=default;entryPerimeter=0;labelBackgroundColor=none;" parent="1" source="l3-factory" target="l3-imputer" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="l4-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5faf5;strokeColor=#c0e0c0;fontSize=11;container=1;pointerEvents=0;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="615" width="1100" height="235" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-title" value="&lt;b&gt;COMPONENT LAYER&lt;/b&gt;&lt;br&gt;Pluggable segmentation and occlusion strategies" style="text;html=1;fontSize=10;fillColor=none;strokeColor=none;fontColor=#7a8ba8;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="622" width="350" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-seg-label" value="&lt;b&gt;Segmenters&lt;/b&gt;&lt;br&gt;Spatial division" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e8;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="655" width="420" height="165" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-seg-base" value="&lt;i&gt;BaseSegmenter (abstract)&lt;/i&gt;&lt;br&gt;get_layout() → SpatialLayout&lt;br&gt;generate_masks() → PhysicalMask" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0faf0;strokeColor=#82b366;fontSize=10;dashed=1;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="110" y="670" width="220" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-seg-patch" value="&lt;b&gt;PatchSegmenter&lt;/b&gt;&lt;br&gt;（default）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="110" y="750" width="120" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-seg-slic" value="&lt;b&gt;SLICSegmenter&lt;/b&gt;&lt;br&gt;Superpixels (CNN)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="250" y="750" width="120" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-seg-grad" value="&lt;b&gt;GradientGuided&lt;/b&gt;&lt;br&gt;Saliency-based" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="750" width="100" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-msk-label" value="&lt;b&gt;Maskers&lt;/b&gt;&lt;br&gt;Feature occlusion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fde8e8;strokeColor=#b85450;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="590" y="655" width="420" height="165" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-msk-base" value="&lt;i&gt;BaseMasker (abstract)&lt;/i&gt;&lt;br&gt;apply(ProcessorOutput, PhysicalMask)&lt;br&gt;→ Modified ProcessorOutput" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef0f0;strokeColor=#b85450;fontSize=10;dashed=1;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="670" width="220" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-msk-vision" value="&lt;b style=&quot;color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;CrossModalMean&lt;/b&gt;&lt;br style=&quot;color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;Image mean mask" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="750" width="120" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-msk-text" value="&lt;b&gt;CrossModalBlur&lt;/b&gt;&lt;br&gt;Image blur mask" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="750" y="750" width="120" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4-msk-cross" value="&lt;b style=&quot;color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;Attention&lt;/b&gt;&lt;br style=&quot;color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;Image Attention mask&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="890" y="750" width="100" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="l5-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf8f0;strokeColor=#e0d8c0;fontSize=11;container=1;pointerEvents=0;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="875" width="1100" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="l5-title" value="&lt;b&gt;DATA CONTRACTS&lt;/b&gt;&lt;br&gt;Standardized objects passed between modules" style="text;html=1;fontSize=10;fillColor=none;strokeColor=none;fontColor=#7a8ba8;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="882" width="350" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="l5-config" value="&lt;b&gt;SegmenterConfig&lt;/b&gt;&lt;br&gt;+ &lt;b&gt;MaskerConfig&lt;/b&gt;&lt;br&gt;Typed read‑only configs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="920" width="170" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="l5-layout" value="&lt;b&gt;SpatialLayout&lt;/b&gt;&lt;br&gt;Player→pixel mapping" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="920" width="170" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="l5-phys" value="&lt;b&gt;PhysicalMask&lt;/b&gt;&lt;br&gt;Image + text binary masks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="530" y="920" width="170" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="l5-po" value="&lt;b&gt;ProcessorOutput&lt;/b&gt;&lt;br&gt;Standardized model inputs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="750" y="920" width="170" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-cfg-fac" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;enriches&lt;/b&gt;&lt;/font&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=9;strokeColor=#d6b656;fontColor=default;exitX=0;exitY=0.483;exitDx=0;exitDy=0;exitPerimeter=0;labelBackgroundColor=none;" parent="1" source="l3-factory" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="30" y="493"/>
+                            <mxPoint x="30" y="950"/>
+                        </Array>
+                        <mxPoint x="90" y="950" as="targetPoint"/>
+                        <mxPoint x="30" y="470" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-cfg-msk" value="&lt;b style=&quot;scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); white-space: normal;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;MaskerConfig&lt;/font&gt;&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;fontSize=9;strokeColor=#d6b656;fontColor=default;dashed=1;textShadow=0;labelBackgroundColor=none;" parent="1" source="l5-config" target="l4-msk-label" edge="1">
+                    <mxGeometry x="0.8889" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="175" y="990"/>
+                            <mxPoint x="710" y="990"/>
+                        </Array>
+                        <mxPoint x="590" y="1020.7619280133929" as="targetPoint"/>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-seg-layout" value="produces" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#82b366;fontColor=#82b366;" parent="1" source="l4-seg-label" target="l5-layout" edge="1">
+                    <mxGeometry x="-0.4921" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="280" y="948"/>
+                        </Array>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-seg-pm" value="generate_masks() returns" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.94;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#82b366;fontColor=#82b366;exitPerimeter=0;" parent="1" source="l4-seg-label" target="l5-phys" edge="1">
+                    <mxGeometry x="-0.5368" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-msk-po" value="apply() returns" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.6;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#b85450;fontColor=#b85450;" parent="1" source="l4-msk-label" target="l5-po" edge="1">
+                    <mxGeometry x="-0.6917" y="-2" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-cfg-seg" value="&lt;b style=&quot;color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); white-space: normal; background-color: rgb(251, 251, 251);&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;SegmenterConfig&lt;/font&gt;&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;fontSize=9;strokeColor=#d6b656;fontColor=#d6b656;dashed=1;entryX=0.203;entryY=0.993;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="l5-config" target="l4-seg-label" edge="1">
+                    <mxGeometry x="0.571" relative="1" as="geometry">
+                        <mxPoint x="20" y="860" as="targetPoint"/>
+                        <mxPoint y="-1" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-fac-seg" value="&lt;span style=&quot;text-wrap-mode: wrap;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Segmenter&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;text-wrap-mode: wrap;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Instance&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.55;exitY=0.001;exitDx=0;exitDy=0;fontSize=8;strokeColor=light-dark(#82b366, #996500);fontColor=default;exitPerimeter=0;entryX=0.72;entryY=0.996;entryDx=0;entryDy=0;entryPerimeter=0;labelBackgroundColor=none;" parent="1" source="l4-seg-label" target="l3-factory" edge="1">
+                    <mxGeometry x="-0.3511" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="321" y="650"/>
+                            <mxPoint x="320" y="650"/>
+                        </Array>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-fac-msk" value="&lt;span style=&quot;scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); white-space: normal;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Masker&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); white-space: normal;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;Instance&lt;/b&gt;&lt;/font&gt;&lt;/span&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=8;strokeColor=light-dark(#b85450, #996500);fontColor=default;labelBackgroundColor=none;exitX=0.063;exitY=0.021;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="l4-msk-label" target="l3-factory" edge="1">
+                    <mxGeometry x="-0.8151" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="617" y="600"/>
+                            <mxPoint x="390" y="600"/>
+                        </Array>
+                        <mxPoint x="670" y="600" as="sourcePoint"/>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

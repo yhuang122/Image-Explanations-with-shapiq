@@ -1,0 +1,31 @@
+{
+  "name": "equivalence_models_mscoco100_n50",
+  "defaults": {
+    "num_coalitions": 50,
+    "batch_size": 64,
+    "tolerance": 0.0001,
+    "cuda": true,
+    "use_amp": false
+  },
+  "cases": [
+    "faithfulness",
+    "insertion_deletion"
+  ],
+  "inputs": [
+    "data/input/wds_mscoco_captions_test_100"
+  ],
+  "models": [
+    "clip-vit-b-32",
+    "clip-vit-b-16",
+    "clip-vit-l-14",
+    "siglip-base-p16-224",
+    "siglip2-so400m-p14-384"
+  ],
+  "strategies": [
+    {
+      "name": "patch_crossmodal_mean",
+      "segmenter": "patch",
+      "masker": "crossmodal_mean"
+    }
+  ]
+}

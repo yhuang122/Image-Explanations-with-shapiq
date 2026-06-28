@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import sys
+import types
 import warnings
+from pathlib import Path
 from time import perf_counter
 from typing import Any
 
@@ -12,18 +16,24 @@ import numpy as np
 from PIL import Image
 
 from aid_outputs import (
-    CURVE_FIELDS,
-    SUMMARY_FIELDS,
     add_curve_context,
     append_rows,
     base_summary_row,
     existing_run_keys,
     interaction_value_path,
+    keep_completed_summary_rows,
+    output_paths,
     run_key_from_values,
     summarize_failure,
+    write_run_metadata,
 )
-from aid_plots import write_aid_plots
-from aid_schema import MASKER_CHOICES, MODEL_PRESETS, SEGMENTER_CHOICES
+from aid_schema import (
+    CURVE_FIELDS,
+    MASKER_CHOICES,
+    MODEL_PRESETS,
+    SEGMENTER_CHOICES,
+    SUMMARY_FIELDS,
+)
 from aid_suite import (
     build_suite,
     describe_suite,
@@ -32,20 +42,55 @@ from aid_suite import (
     suite_output_dir,
 )
 
+LOCAL_SRC_PACKAGE = "_benchmark_local_src"
+LOCAL_SRC_DIR = Path(__file__).resolve().parents[3] / "src"
+
 
 def configure_warnings() -> None:
+    # pandas is pulled in indirectly by sklearn during ProxySHAP imports.
+    # In this Windows environment, importing native pyarrow can crash the
+    # process, and the benchmark does not use pandas' optional Arrow backend.
+    sys.modules.setdefault("pyarrow", None)
     warnings.filterwarnings("ignore", message="Using a slow image processor.*")
     warnings.filterwarnings("ignore", message=".*Torch was not compiled with flash attention.*")
     warnings.filterwarnings("ignore", message="Index FWBII is not a valid index.*")
 
 
+def local_src_module(module_name: str):
+    """Load selected src modules without executing src/__init__.py."""
+    if LOCAL_SRC_PACKAGE not in sys.modules:
+        package = types.ModuleType(LOCAL_SRC_PACKAGE)
+        package.__path__ = [str(LOCAL_SRC_DIR)]
+        sys.modules[LOCAL_SRC_PACKAGE] = package
+
+    full_name = f"{LOCAL_SRC_PACKAGE}.{module_name}"
+    if full_name in sys.modules:
+        return sys.modules[full_name]
+
+    module_path = LOCAL_SRC_DIR / f"{module_name}.py"
+    spec = importlib.util.spec_from_file_location(full_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load local src module: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[full_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run AID explanation-quality benchmarks.")
-    parser.add_argument("--config", help="JSON benchmark suite config.")
-    parser.add_argument("--dry-run", action="store_true", help="Print planned runs and exit.")
-    parser.add_argument("--force", action="store_true", help="Recompute runs already present in summary CSV.")
+    parser.add_argument("--config", help="JSON benchmark suite config file.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the expanded benchmark plan and exit. Normal runs already print this plan before execution.",
+    )
+    parser.add_argument("--force", action="store_true", help="Recompute runs even when result CSVs already exist.")
     parser.add_argument("--quiet", action="store_true", help="Suppress final JSON output.")
-    parser.add_argument("--input", help="Single image file or manifest-backed image directory.")
+    parser.add_argument(
+        "--input",
+        help="Single image file or manifest-backed image directory. Relative paths use project root.",
+    )
     parser.add_argument("--text", help="Required text input for single-image input.")
     parser.add_argument("--text-column", choices=("first_caption", "caption"), help="Manifest text column.")
     model_group = parser.add_mutually_exclusive_group()
@@ -73,6 +118,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--slic-sigma", type=float, default=0.0)
     parser.add_argument("--gradient-guided-n-segments", type=int)
     parser.add_argument("--masker-strategy", choices=MASKER_CHOICES)
+    parser.add_argument("--vision-blur-sigma", type=float, default=3.0)
     return parser.parse_args()
 
 
@@ -84,6 +130,22 @@ def resolve_device(use_cuda: bool):
     return torch.device("cuda" if use_cuda else "cpu")
 
 
+class ProcessorWithAttentionMask:
+    """Delegate to a HF processor and fill missing attention masks for SigLIP-style outputs."""
+
+    def __init__(self, processor):
+        self._processor = processor
+
+    def __call__(self, *args, **kwargs):
+        outputs = self._processor(*args, **kwargs)
+        if "attention_mask" not in outputs and "input_ids" in outputs:
+            outputs["attention_mask"] = (outputs["input_ids"] != 1).long()
+        return outputs
+
+    def __getattr__(self, name: str):
+        return getattr(self._processor, name)
+
+
 def load_model_bundle(model_case: dict[str, Any], device) -> dict[str, Any]:
     from transformers import AutoModel, AutoProcessor
 
@@ -91,7 +153,7 @@ def load_model_bundle(model_case: dict[str, Any], device) -> dict[str, Any]:
     model = AutoModel.from_pretrained(model_case["model_name"])
     model.to(device)
     model.eval()
-    processor = AutoProcessor.from_pretrained(model_case["model_name"])
+    processor = ProcessorWithAttentionMask(AutoProcessor.from_pretrained(model_case["model_name"]))
     return {"model": model, "processor": processor, "model_load_runtime_s": perf_counter() - start}
 
 
@@ -112,7 +174,12 @@ def build_segmenter_config(strategy: dict[str, Any]):
 def build_masker_config(strategy: dict[str, Any]):
     from ImputerFactory import MaskerConfig
 
-    return MaskerConfig(strategy=strategy["masker_strategy"])
+    config = MaskerConfig(strategy=strategy["masker_strategy"])
+    if strategy["masker_strategy"] == "crossmodal_blur":
+        config.vision_blur.sigma = strategy["crossmodal_blur_sigma"]
+    elif strategy["masker_strategy"] == "vision_blur":
+        config.vision_blur.sigma = strategy["vision_blur_sigma"]
+    return config
 
 
 def build_game(
@@ -149,12 +216,11 @@ def should_use_crossmodal(game, method: dict[str, Any]) -> bool:
 
 
 def run_fixlip_explanation(game, method: dict[str, Any], random_state: int):
-    import src
-
+    fixlip = local_src_module("fixlip")
     kwargs = dict(method["proxy_params"])
     start = perf_counter()
     if should_use_crossmodal(game, method):
-        approximator = src.fixlip.FIxLIP(
+        approximator = fixlip.FIxLIP(
             n_players_image=game.n_players_image,
             n_players_text=game.n_players_text,
             mode="banzhaf",
@@ -171,7 +237,7 @@ def run_fixlip_explanation(game, method: dict[str, Any], random_state: int):
             **kwargs,
         )
     else:
-        approximator = src.fixlip.FIxLIP(
+        approximator = fixlip.FIxLIP(
             n_players=game.n_players,
             mode=method["sampler_name"],
             max_order=method["order"],
@@ -196,10 +262,9 @@ def first_order_attribution(iv, method: dict[str, Any]) -> np.ndarray:
     if method["order"] == 1:
         return np.asarray(iv.get_n_order(1).values, dtype=float)
 
-    import src
-
+    utils = local_src_module("utils")
     p_sampler = 0.5 if method["sampler_p"] is None else float(method["sampler_p"])
-    first_order = src.utils.convert_iv_to_first_order(iv, p_sampler=p_sampler)
+    first_order = utils.convert_iv_to_first_order(iv, p_sampler=p_sampler)
     return np.asarray(first_order.get_n_order(1).values, dtype=float)
 
 
@@ -212,16 +277,15 @@ def sorted_deletion_curves(game, attribution_values: np.ndarray) -> tuple[np.nda
 
 
 def interaction_deletion_curves(game, iv, attribution_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    import src
-
+    clique = local_src_module("clique")
     start_players = None
     if game.n_players > 100:
-        start_players = src.clique.get_interesting_starting_players(
+        start_players = clique.get_interesting_starting_players(
             attribution_values=attribution_values,
             first_order_values=iv.get_n_order(1).values,
             k=min(19, game.n_players),
         )
-    mif_coalitions, lif_coalitions = src.clique.get_cliques_greedy_mif_lif(
+    mif_coalitions, lif_coalitions = clique.get_cliques_greedy_mif_lif(
         iv=iv,
         start_players=start_players,
         verbose=False,
@@ -452,10 +516,11 @@ def failure_row(
     method: dict[str, Any],
     game_build_runtime_s: float | None,
     device,
+    output_dir,
     error: Exception,
     total_runtime_s: float,
 ) -> dict[str, Any]:
-    interaction_path = interaction_value_path(suite_output_dir(suite), sample, model_case, strategy, method)
+    interaction_path = interaction_value_path(output_dir, sample, model_case, strategy, method)
     row = base_summary_row(
         sample,
         model_case,
@@ -471,18 +536,19 @@ def failure_row(
 
 
 def run_suite(args: argparse.Namespace, suite: dict[str, Any], output_dir) -> dict[str, Any]:
-    import src
-
-    src.utils.set_seed(suite["defaults"]["random_state"])
+    utils = local_src_module("utils")
+    utils.set_seed(suite["defaults"]["random_state"])
     device = resolve_device(suite["defaults"]["cuda"])
-    csv_dir = output_dir / "csv"
-    plots_dir = output_dir / "plots"
-    summary_path = csv_dir / "aid_summary.csv"
-    curves_path = csv_dir / "aid_curves.csv"
+    paths = output_paths(output_dir)
+    plots_dir = paths["plots_dir"]
+    summary_path = paths["summary_csv"]
+    curves_path = paths["curves_csv"]
     if args.force:
         for path in (summary_path, curves_path):
             if path.exists():
                 path.unlink()
+    else:
+        keep_completed_summary_rows(summary_path)
 
     completed_keys = existing_run_keys(summary_path)
     model_cache: dict[str, dict[str, Any]] = {}
@@ -554,6 +620,7 @@ def run_suite(args: argparse.Namespace, suite: dict[str, Any], output_dir) -> di
                                 method,
                                 game_build_runtime_s,
                                 device,
+                                output_dir,
                                 error,
                                 perf_counter() - total_start,
                             )
@@ -568,6 +635,8 @@ def run_suite(args: argparse.Namespace, suite: dict[str, Any], output_dir) -> di
                     import torch
 
                     torch.cuda.empty_cache()
+
+    from aid_plots import write_aid_plots
 
     plot_paths = write_aid_plots(summary_path, curves_path, plots_dir)
     return {
@@ -587,12 +656,17 @@ def main() -> int:
     args = parse_args()
     suite = build_suite(args)
     output_dir = suite_output_dir(suite)
+    plan = describe_suite(suite)
     if args.dry_run:
         if not args.quiet:
-            print(json.dumps(describe_suite(suite), indent=2))
+            print(json.dumps(plan, indent=2))
         return 0
 
+    if not args.quiet:
+        print(json.dumps({"benchmark_plan": plan}, indent=2), flush=True)
+    metadata_paths = write_run_metadata(output_dir, args, suite, plan)
     result = run_suite(args, suite, output_dir)
+    result["metadata_paths"] = metadata_paths
     if not args.quiet:
         print(json.dumps(result, indent=2))
     return 1 if result["failed_runs"] else 0

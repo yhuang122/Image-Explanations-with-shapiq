@@ -25,6 +25,8 @@ from aid_schema import (
     slug,
 )
 
+DEFAULT_BLUR_SIGMA = 3.0
+
 
 def resolve_project_path(path_value: str | Path) -> Path:
     path = Path(path_value)
@@ -180,6 +182,8 @@ def normalize_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"Unknown masker strategy '{masker}'.")
     slic = strategy.get("slic", {})
     gradient_guided = strategy.get("gradient_guided", {})
+    vision_blur = strategy.get("vision_blur", {})
+    crossmodal_blur = strategy.get("crossmodal_blur", vision_blur)
     gradient_segments = gradient_guided.get("n_segments")
     return {
         "strategy_name": strategy.get("name") or f"{segmenter}_{masker}",
@@ -190,6 +194,10 @@ def normalize_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
         "slic_sigma": float(slic.get("sigma", strategy.get("slic_sigma", 0.0))),
         "gradient_guided_n_segments": (
             None if gradient_segments is None else int(gradient_segments)
+        ),
+        "vision_blur_sigma": float(vision_blur.get("sigma", strategy.get("vision_blur_sigma", DEFAULT_BLUR_SIGMA))),
+        "crossmodal_blur_sigma": float(
+            crossmodal_blur.get("sigma", strategy.get("crossmodal_blur_sigma", DEFAULT_BLUR_SIGMA))
         ),
     }
 
@@ -210,6 +218,8 @@ def strategy_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
                 "sigma": args.slic_sigma,
             },
             "gradient_guided": {"n_segments": args.gradient_guided_n_segments},
+            "vision_blur": {"sigma": args.vision_blur_sigma},
+            "crossmodal_blur": {"sigma": args.vision_blur_sigma},
         }
     )
 
@@ -299,6 +309,43 @@ def suite_output_dir(suite: dict[str, Any]) -> Path:
     return RESULTS_DIR / f"benchmark_{slug(suite['name'], max_length=80)}"
 
 
+def strategy_plan(strategy: dict[str, Any]) -> dict[str, Any]:
+    segmenter_params = {}
+    if strategy["segmenter_strategy"] == "slic":
+        segmenter_params = {
+            "n_segments": strategy["slic_n_segments"],
+            "compactness": strategy["slic_compactness"],
+            "sigma": strategy["slic_sigma"],
+        }
+    elif strategy["segmenter_strategy"] == "gradient_guided":
+        segmenter_params = {"n_segments": strategy["gradient_guided_n_segments"]}
+
+    masker_params = {}
+    if strategy["masker_strategy"] == "vision_blur":
+        masker_params = {"sigma": strategy["vision_blur_sigma"]}
+    elif strategy["masker_strategy"] == "crossmodal_blur":
+        masker_params = {"sigma": strategy["crossmodal_blur_sigma"]}
+    return {
+        "strategy_name": strategy["strategy_name"],
+        "segmenter_strategy": strategy["segmenter_strategy"],
+        "segmenter_params": segmenter_params,
+        "masker_strategy": strategy["masker_strategy"],
+        "masker_params": masker_params,
+    }
+
+
+def method_plan(method: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "method_name": method["method_name"],
+        "mode": method["mode"],
+        "order": method["order"],
+        "approximation_type": method["approximation_type"],
+        "budget": method["budget"],
+        "sampler_name": method["sampler_name"],
+        "sampler_p": method["sampler_p"],
+    }
+
+
 def describe_suite(suite: dict[str, Any]) -> dict[str, Any]:
     samples = [
         sample
@@ -310,15 +357,8 @@ def describe_suite(suite: dict[str, Any]) -> dict[str, Any]:
         "inputs": suite["inputs"],
         "input_files": len(samples),
         "models": suite["models"],
-        "strategies": [
-            {
-                "strategy_name": strategy["strategy_name"],
-                "segmenter_strategy": strategy["segmenter_strategy"],
-                "masker_strategy": strategy["masker_strategy"],
-            }
-            for strategy in suite["strategies"]
-        ],
-        "methods": suite["methods"],
+        "strategies": [strategy_plan(strategy) for strategy in suite["strategies"]],
+        "methods": [method_plan(method) for method in suite["methods"]],
         "defaults": suite["defaults"],
         "planned_runs": len(samples) * len(suite["models"]) * len(suite["strategies"]) * len(suite["methods"]),
     }

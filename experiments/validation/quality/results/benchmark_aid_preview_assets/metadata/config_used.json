@@ -1,0 +1,200 @@
+{
+  "name": "aid_preview_assets",
+  "inputs": [
+    {
+      "path": "assets/dog_and_hydrant.jpg",
+      "text": "dog and hydrant"
+    },
+    {
+      "path": "assets/giraffe_drinking.jpg",
+      "text": "giraffe drinking"
+    }
+  ],
+  "defaults": {
+    "batch_size": 64,
+    "curve_points": 51,
+    "cuda": true,
+    "use_amp": false,
+    "text_column": "first_caption"
+  },
+  "models": [
+    "clip-vit-b-32",
+    "siglip-base-p16-224"
+  ],
+  "strategies": [
+    {
+      "name": "patch_crossmodal_mean",
+      "segmenter": "patch",
+      "masker": "crossmodal_mean"
+    },
+    {
+      "name": "patch_crossmodal_blur",
+      "segmenter": "patch",
+      "masker": "crossmodal_blur",
+      "crossmodal_blur": {
+        "sigma": 3.0
+      }
+    },
+    {
+      "name": "patch_vision_mean",
+      "segmenter": "patch",
+      "masker": "vision_mean"
+    },
+    {
+      "name": "patch_vision_blur",
+      "segmenter": "patch",
+      "masker": "vision_blur",
+      "vision_blur": {
+        "sigma": 3.0
+      }
+    },
+    {
+      "name": "patch_text_attn",
+      "segmenter": "patch",
+      "masker": "text_attn"
+    },
+    {
+      "name": "patch_attention",
+      "segmenter": "patch",
+      "masker": "attention"
+    },
+    {
+      "name": "slic_crossmodal_mean",
+      "segmenter": "slic",
+      "masker": "crossmodal_mean",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      }
+    },
+    {
+      "name": "slic_crossmodal_blur",
+      "segmenter": "slic",
+      "masker": "crossmodal_blur",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      },
+      "crossmodal_blur": {
+        "sigma": 3.0
+      }
+    },
+    {
+      "name": "slic_vision_mean",
+      "segmenter": "slic",
+      "masker": "vision_mean",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      }
+    },
+    {
+      "name": "slic_vision_blur",
+      "segmenter": "slic",
+      "masker": "vision_blur",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      },
+      "vision_blur": {
+        "sigma": 3.0
+      }
+    },
+    {
+      "name": "slic_text_attn",
+      "segmenter": "slic",
+      "masker": "text_attn",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      }
+    },
+    {
+      "name": "slic_attention",
+      "segmenter": "slic",
+      "masker": "attention",
+      "slic": {
+        "n_segments": 49,
+        "compactness": 10.0,
+        "sigma": 0.0
+      }
+    },
+    {
+      "name": "gradient_guided_crossmodal_mean",
+      "segmenter": "gradient_guided",
+      "masker": "crossmodal_mean",
+      "gradient_guided": {
+        "n_segments": 49
+      }
+    },
+    {
+      "name": "gradient_guided_crossmodal_blur",
+      "segmenter": "gradient_guided",
+      "masker": "crossmodal_blur",
+      "gradient_guided": {
+        "n_segments": 49
+      },
+      "crossmodal_blur": {
+        "sigma": 3.0
+      }
+    },
+    {
+      "name": "gradient_guided_vision_mean",
+      "segmenter": "gradient_guided",
+      "masker": "vision_mean",
+      "gradient_guided": {
+        "n_segments": 49
+      }
+    },
+    {
+      "name": "gradient_guided_vision_blur",
+      "segmenter": "gradient_guided",
+      "masker": "vision_blur",
+      "gradient_guided": {
+        "n_segments": 49
+      },
+      "vision_blur": {
+        "sigma": 3.0
+      }
+    },
+    {
+      "name": "gradient_guided_text_attn",
+      "segmenter": "gradient_guided",
+      "masker": "text_attn",
+      "gradient_guided": {
+        "n_segments": 49
+      }
+    },
+    {
+      "name": "gradient_guided_attention",
+      "segmenter": "gradient_guided",
+      "masker": "attention",
+      "gradient_guided": {
+        "n_segments": 49
+      }
+    }
+  ],
+  "methods": [
+    {
+      "name": "kernelshap_shapley_order1_preview",
+      "mode": "shapley",
+      "order": 1,
+      "explainer_name": "fixlip",
+      "approximation_type": "original",
+      "budget": 512
+    },
+    {
+      "name": "proxyshap_banzhaf_p05_order2_preview",
+      "mode": "banzhaf/0.5",
+      "order": 2,
+      "explainer_name": "fixlip",
+      "approximation_type": "proxyshap",
+      "budget": 50
+    }
+  ]
+}

@@ -17,7 +17,7 @@
   - `generate_masks(coalitions_image, coalitions_text)` → returns `PhysicalMask` (called per batch)
 - **Must NOT**: access `model`, call `processor`, mutate tensors on GPU inside `generate_masks`
 - **Allowed to vary**: grid shape, player count, player-to-pixel mapping, mask generation algorithm
-- **Examples**: `PatchSegmenter` (rigid grid), `SLICSegmenter` (perceptual superpixels), `GradientGuidedSegmenter` (gradient-based, future), `AdaptiveSegmenter` (score-driven, future)
+- **Examples**: `PatchSegmenter` (rigid grid), `SLICSegmenter` (perceptual superpixels), `GradientGuidedSegmenter` (gradient-based, future)
 
 ### Masker
 **Sole responsibility**: Feature occlusion — apply the `PhysicalMask` to `ProcessorOutput`.

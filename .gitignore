@@ -198,3 +198,5 @@ cython_debug/
 experiments/validation/equivalence/results/**/csv/
 experiments/validation/quality/results/**/csv/
 experiments/validation/quality/results/**/interaction_values/
+experiments/validation/equivalence/results/**/metadata/
+experiments/validation/quality/results/**/metadata/

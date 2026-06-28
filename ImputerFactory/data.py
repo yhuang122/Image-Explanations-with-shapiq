@@ -182,7 +182,7 @@ class SpatialLayout:
         n_channels: Number of image channels (typically 3).
         model_type: 'clip', 'siglip', or 'siglip2'.
         text_total_length: Total token length expected by the model (e.g., 64).
-        is_stateful: Whether the layout can change across iterations (e.g., AdaptiveSegmenter).
+        is_stateful: Whether the layout can change across iterations.
     """
     n_players_image: int
     n_players_text: int

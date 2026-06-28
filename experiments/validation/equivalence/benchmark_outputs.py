@@ -5,7 +5,11 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import platform
+import shutil
+import sys
 from dataclasses import asdict
+from importlib import metadata
 from pathlib import Path
 
 import numpy as np
@@ -13,18 +17,37 @@ import numpy as np
 from benchmark_schema import (
     BENCHMARK_SUMMARY_FIELDS,
     COMPARISON_SCOPE_FIELDS,
+    CSV_DIRNAME,
+    PLOTS_DIRNAME,
+    PROJECT_ROOT,
     RESULTS_DIR,
     ROW_FIELDS,
     SUMMARY_FIELDS,
     slug,
 )
-from benchmark_plots import CSV_DIRNAME, PLOT_MODES, PLOTS_DIRNAME, write_benchmark_plots
 
 
-RUNS_DIRNAME = CSV_DIRNAME
+METADATA_DIRNAME = "metadata"
+SUMMARY_FILENAME = "summary.csv"
+ORIGINAL_PIPELINE_FILENAME = "original_pipeline.csv"
+
+
+def output_paths(output_dir: Path) -> dict[str, Path]:
+    csv_dir = output_dir / CSV_DIRNAME
+    plots_dir = output_dir / PLOTS_DIRNAME
+    metadata_dir = output_dir / METADATA_DIRNAME
+    return {
+        "metadata_dir": metadata_dir,
+        "csv_dir": csv_dir,
+        "plots_dir": plots_dir,
+        "summary_csv": csv_dir / SUMMARY_FILENAME,
+        "original_pipeline_csv": csv_dir / ORIGINAL_PIPELINE_FILENAME,
+    }
 
 
 def active_params(config) -> dict:
+    if config.strategy == "crossmodal_blur":
+        return {"sigma": config.vision_blur.sigma}
     params = config.active_params
     return asdict(params) if params is not None else {}
 
@@ -103,8 +126,112 @@ def suite_output_dir(name: str) -> Path:
     return RESULTS_DIR / name
 
 
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+    tmp_path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    tmp_path.replace(path)
+
+
+def package_version(package_name: str) -> str | None:
+    try:
+        return metadata.version(package_name)
+    except metadata.PackageNotFoundError:
+        return None
+
+
+def torch_environment() -> dict:
+    return {
+        "available": package_version("torch") is not None,
+        "version": package_version("torch"),
+        "cuda_runtime_checked": False,
+        "note": "CUDA availability is checked by the benchmark runner when --cuda is used.",
+    }
+
+
+def package_contains_module(package_name: str, module_name: str) -> bool:
+    try:
+        files = metadata.distribution(package_name).files or []
+    except metadata.PackageNotFoundError:
+        return False
+
+    module_prefix = module_name.replace(".", "/")
+    module_file = f"{module_prefix}.py"
+    module_init = f"{module_prefix}/__init__.py"
+    normalized_files = [str(file).replace("\\", "/") for file in files]
+    return module_file in normalized_files or module_init in normalized_files
+
+
+def shapiq_tree_status() -> dict:
+    return {
+        "version": package_version("shapiq"),
+        "module_files_present": package_contains_module("shapiq", "shapiq.tree"),
+        "import_checked": False,
+    }
+
+
+def environment_info() -> dict:
+    packages = ("torch", "transformers", "shapiq", "numpy", "pandas", "Pillow", "scikit-learn")
+    return {
+        "python": {
+            "version": sys.version,
+            "executable": sys.executable,
+        },
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "platform": platform.platform(),
+        },
+        "packages": {package: package_version(package) for package in packages},
+        "torch": torch_environment(),
+        "preflight": {
+            "shapiq_tree": shapiq_tree_status(),
+        },
+    }
+
+
+def config_path_from_args(args) -> Path | None:
+    if not getattr(args, "config", None):
+        return None
+    path = Path(args.config)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def write_run_metadata(output_dir: Path, args, suite: dict, plan: dict) -> dict:
+    metadata_dir = output_paths(output_dir)["metadata_dir"]
+    paths = {
+        "benchmark_plan": metadata_dir / "benchmark_plan.json",
+        "suite_normalized": metadata_dir / "suite_normalized.json",
+        "cli_args": metadata_dir / "cli_args.json",
+        "environment": metadata_dir / "environment.json",
+    }
+    write_json(paths["benchmark_plan"], plan)
+    write_json(paths["suite_normalized"], suite)
+    write_json(paths["cli_args"], vars(args))
+    write_json(paths["environment"], environment_info())
+
+    config_path = config_path_from_args(args)
+    if config_path is not None:
+        if config_path.is_dir():
+            configs_dir = metadata_dir / "configs"
+            if configs_dir.exists():
+                for old_config in configs_dir.glob("*.json"):
+                    old_config.unlink()
+            else:
+                configs_dir.mkdir(parents=True, exist_ok=True)
+            for source in sorted(config_path.glob("*.json")):
+                shutil.copyfile(source, configs_dir / source.name)
+            paths["config_dir"] = configs_dir
+        else:
+            paths["config_used"] = metadata_dir / "config_used.json"
+            shutil.copyfile(config_path, paths["config_used"])
+
+    return {key: str(path) for key, path in paths.items()}
+
+
 def comparison_csv_path(output_dir: Path, case: dict) -> Path:
-    return output_dir / RUNS_DIRNAME / f"{run_name(case)}_comparison.csv"
+    return output_paths(output_dir)["csv_dir"] / f"{run_name(case)}_comparison.csv"
 
 
 def true_text(value) -> bool:
@@ -275,11 +402,29 @@ def write_results(
     tmp_path.replace(csv_path)
     return {"csv": str(csv_path)}
 
+
+def write_failure_result(output_dir: Path, case: dict, report: dict) -> dict:
+    csv_path = comparison_csv_path(output_dir, case)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = csv_path.with_suffix(f"{csv_path.suffix}.tmp")
+    with tmp_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=SUMMARY_FIELDS + ROW_FIELDS)
+        writer.writeheader()
+        row = {field: report.get(field, "") for field in SUMMARY_FIELDS}
+        row.update({field: "" for field in ROW_FIELDS})
+        row["row_type"] = "failure"
+        writer.writerow(row)
+    tmp_path.replace(csv_path)
+    return {"csv": str(csv_path)}
+
+
 def write_benchmark_summary(output_dir: Path, reports: list[dict], plot_mode: str | None = None) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
-    csv_dir = output_dir / CSV_DIRNAME
+    paths = output_paths(output_dir)
+    csv_dir = paths["csv_dir"]
+    plots_dir = paths["plots_dir"]
     csv_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = csv_dir / "summary.csv"
+    summary_path = paths["summary_csv"]
     tmp_summary_path = summary_path.with_suffix(f"{summary_path.suffix}.tmp")
 
     with tmp_summary_path.open("w", newline="", encoding="utf-8") as file:
@@ -293,13 +438,25 @@ def write_benchmark_summary(output_dir: Path, reports: list[dict], plot_mode: st
 
     result_paths = {"summary_csv": str(summary_path)}
     if plot_mode is not None:
-        result_paths.update(write_benchmark_plots(output_dir, reports, plot_mode))
+        from benchmark_plots import write_benchmark_plots
+
+        result_paths.update(
+            write_benchmark_plots(
+                output_dir,
+                reports,
+                plot_mode,
+                plots_dir=plots_dir,
+                csv_dir=csv_dir,
+            )
+        )
     return result_paths
 
 
 def write_original_summary(output_dir: Path, reports: list[dict]) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = output_dir / "original_pipeline.csv"
+    paths = output_paths(output_dir)
+    paths["csv_dir"].mkdir(parents=True, exist_ok=True)
+    summary_path = paths["original_pipeline_csv"]
     tmp_summary_path = summary_path.with_suffix(f"{summary_path.suffix}.tmp")
     fieldnames = (
         "case", "input_path", "model_preset", "model_name", "text", "text_full", "text_source", "comparison_type",

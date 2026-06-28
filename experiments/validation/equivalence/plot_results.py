@@ -6,14 +6,13 @@ import argparse
 import csv
 from pathlib import Path
 
-from benchmark_outputs import (
+from benchmark_outputs import fill_legacy_scope_fields, output_paths as benchmark_output_paths
+from benchmark_schema import (
     CSV_DIRNAME,
     PLOT_MODES,
-    PLOTS_DIRNAME,
-    fill_legacy_scope_fields,
-    write_benchmark_plots,
+    PROJECT_ROOT,
+    SUMMARY_FIELDS as BENCHMARK_FIELDS,
 )
-from benchmark_schema import PROJECT_ROOT, SUMMARY_FIELDS as BENCHMARK_FIELDS
 
 UNIFIED_REQUIRED_FIELDS = {
     "case",
@@ -86,7 +85,7 @@ def resolve_path(path: str) -> Path:
 
 
 def suite_root(input_path: Path) -> Path:
-    return input_path.parent if input_path.name in {"runs", CSV_DIRNAME} else input_path
+    return input_path.parent if input_path.name == CSV_DIRNAME else input_path
 
 
 def benchmark_csv_paths(input_path: Path) -> list[Path]:
@@ -101,8 +100,9 @@ def benchmark_csv_paths(input_path: Path) -> list[Path]:
 
 def output_paths(args: argparse.Namespace, input_path: Path) -> tuple[Path, Path]:
     root = suite_root(input_path)
-    summary_path = resolve_path(args.output) if args.output else root / CSV_DIRNAME / "summary.csv"
-    plot_path = resolve_path(args.plot) if args.plot else root / PLOTS_DIRNAME
+    paths = benchmark_output_paths(root)
+    summary_path = resolve_path(args.output) if args.output else paths["summary_csv"]
+    plot_path = resolve_path(args.plot) if args.plot else paths["plots_dir"]
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     plot_path.mkdir(parents=True, exist_ok=True)
     return summary_path, plot_path
@@ -126,6 +126,8 @@ def main() -> int:
     summary_path, plot_path = output_paths(args, input_path)
     write_summary(rows, summary_path)
     root = suite_root(input_path)
+    from benchmark_plots import write_benchmark_plots
+
     plot_outputs = write_benchmark_plots(root, rows, args.mode, plots_dir=plot_path, csv_dir=summary_path.parent)
 
     print(summary_path)

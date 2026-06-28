@@ -25,6 +25,7 @@ from benchmark_schema import (
 DEFAULT_RANDOM_STATE = 0
 REQUIRED_DEFAULTS = ("num_coalitions", "batch_size")
 MANIFEST_FILENAME = "manifest.csv"
+DEFAULT_VISION_BLUR_SIGMA = 3.0
 
 
 def resolve_project_path(path_value: str) -> Path:
@@ -90,13 +91,31 @@ def require_cli_args(args: argparse.Namespace) -> None:
         raise ValueError(f"Missing required argument(s) without --config: {', '.join(missing)}")
 
 
-def load_json_config(path_value: str) -> dict:
-    path = resolve_project_path(path_value)
+def load_json_config(path_value: str | Path) -> dict:
+    path = path_value if isinstance(path_value, Path) else resolve_project_path(path_value)
     if path.suffix.lower() != ".json":
         raise ValueError("Only JSON benchmark presets are supported.")
     if not path.exists():
         raise FileNotFoundError(f"Benchmark config not found: {path}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def config_json_paths(path_value: str) -> list[Path]:
+    path = resolve_project_path(path_value)
+    if path.is_file():
+        return [path]
+    if not path.is_dir():
+        raise FileNotFoundError(f"Benchmark config path not found: {path}")
+    paths = sorted(path.glob("*.json"))
+    if not paths:
+        raise FileNotFoundError(f"Benchmark config directory contains no JSON files: {path}")
+    return paths
+
+
+def suite_group_output_name(path_value: str) -> str:
+    path = resolve_project_path(path_value)
+    name = slug(path.name if path.is_dir() else path.stem, max_length=80)
+    return name if name.startswith("benchmark_") else f"benchmark_{name}"
 
 
 def merged_defaults(config: dict, args: argparse.Namespace) -> dict:
@@ -201,6 +220,8 @@ def normalize_strategy(strategy: dict) -> dict:
 
     slic = strategy.get("slic", {})
     gradient_guided = strategy.get("gradient_guided", {})
+    vision_blur = strategy.get("vision_blur", {})
+    crossmodal_blur = strategy.get("crossmodal_blur", vision_blur)
     gradient_guided_n_segments = gradient_guided.get("n_segments")
     return {
         "strategy_name": strategy.get("name") or f"{segmenter}_{masker}",
@@ -212,6 +233,8 @@ def normalize_strategy(strategy: dict) -> dict:
         "gradient_guided_n_segments": (
             None if gradient_guided_n_segments is None else int(gradient_guided_n_segments)
         ),
+        "vision_blur_sigma": float(vision_blur.get("sigma", DEFAULT_VISION_BLUR_SIGMA)),
+        "crossmodal_blur_sigma": float(crossmodal_blur.get("sigma", DEFAULT_VISION_BLUR_SIGMA)),
     }
 
 
@@ -229,6 +252,8 @@ def resolve_strategy_specs(args: argparse.Namespace) -> list[dict]:
                 "slic_compactness": args.slic_compactness,
                 "slic_sigma": args.slic_sigma,
                 "gradient_guided_n_segments": args.gradient_guided_n_segments,
+                "vision_blur_sigma": args.vision_blur_sigma,
+                "crossmodal_blur_sigma": args.vision_blur_sigma,
             }
         ]
 
@@ -241,6 +266,8 @@ def resolve_strategy_specs(args: argparse.Namespace) -> list[dict]:
                 "slic_compactness": args.slic_compactness,
                 "slic_sigma": args.slic_sigma,
                 "gradient_guided_n_segments": args.gradient_guided_n_segments,
+                "vision_blur_sigma": args.vision_blur_sigma,
+                "crossmodal_blur_sigma": args.vision_blur_sigma,
             }
         )
     return specs
@@ -252,6 +279,24 @@ def normalize_strategies(raw_strategies, args: argparse.Namespace) -> list[dict]
     if not raw_strategies:
         return resolve_strategy_specs(args)
     return [normalize_strategy(strategy) for strategy in raw_strategies]
+
+
+def build_suite_from_config(config: dict, args: argparse.Namespace, config_path: Path | None = None) -> dict:
+    name = config.get("name")
+    if name is None and config_path is not None:
+        name = config_path.stem
+    elif name is None:
+        name = Path(args.config).stem
+    return {
+        "name": name,
+        "run_mode": args.run_mode,
+        "single_text": args.text,
+        "defaults": merged_defaults(config, args),
+        "cases": normalize_cases(config.get("cases"), args.case),
+        "inputs": normalize_inputs(config.get("inputs"), args),
+        "models": normalize_models(config.get("models"), args),
+        "strategies": normalize_strategies(config.get("strategies"), args),
+    }
 
 
 def build_suite(args: argparse.Namespace) -> dict:
@@ -277,16 +322,24 @@ def build_suite(args: argparse.Namespace) -> dict:
         }
 
     config = load_json_config(args.config)
-    return {
-        "name": config.get("name") or Path(args.config).stem,
-        "run_mode": args.run_mode,
-        "single_text": args.text,
-        "defaults": merged_defaults(config, args),
-        "cases": normalize_cases(config.get("cases"), args.case),
-        "inputs": normalize_inputs(config.get("inputs"), args),
-        "models": normalize_models(config.get("models"), args),
-        "strategies": normalize_strategies(config.get("strategies"), args),
-    }
+    return build_suite_from_config(config, args)
+
+
+def build_suites(args: argparse.Namespace) -> tuple[list[dict], str]:
+    if args.config is None:
+        suite = build_suite(args)
+        return [suite], suite_output_name(suite)
+
+    config_path = resolve_project_path(args.config)
+    if config_path.is_dir():
+        suites = [
+            build_suite_from_config(load_json_config(path), args, path)
+            for path in config_json_paths(args.config)
+        ]
+        return suites, suite_group_output_name(args.config)
+
+    suite = build_suite(args)
+    return [suite], suite_output_name(suite)
 
 
 def resolve_model_selection(case: dict, args: argparse.Namespace) -> None:
@@ -348,13 +401,35 @@ def describe_suite(suite: dict) -> dict:
         "input_files": len(samples),
         "models": suite["models"],
         "strategies": [] if suite["run_mode"] == "original" else [
-            {
-                "strategy_name": spec["strategy_name"],
-                "segmenter_strategy": spec["segmenter_strategy"],
-                "masker_strategy": spec["masker_strategy"],
-            }
+            strategy_plan(spec)
             for spec in suite["strategies"]
         ],
         "defaults": suite["defaults"],
         "planned_runs": len(suite["cases"]) * len(samples) * len(suite["models"]) * strategy_count,
+    }
+
+
+def strategy_plan(strategy_spec: dict) -> dict:
+    segmenter_params = {}
+    if strategy_spec["segmenter_strategy"] == "slic":
+        segmenter_params = {
+            "n_segments": strategy_spec["slic_n_segments"],
+            "compactness": strategy_spec["slic_compactness"],
+            "sigma": strategy_spec["slic_sigma"],
+        }
+    elif strategy_spec["segmenter_strategy"] == "gradient_guided":
+        segmenter_params = {"n_segments": strategy_spec["gradient_guided_n_segments"]}
+
+    masker_params = {}
+    if strategy_spec["masker_strategy"] == "vision_blur":
+        masker_params = {"sigma": strategy_spec["vision_blur_sigma"]}
+    elif strategy_spec["masker_strategy"] == "crossmodal_blur":
+        masker_params = {"sigma": strategy_spec["crossmodal_blur_sigma"]}
+
+    return {
+        "strategy_name": strategy_spec["strategy_name"],
+        "segmenter_strategy": strategy_spec["segmenter_strategy"],
+        "segmenter_params": segmenter_params,
+        "masker_strategy": strategy_spec["masker_strategy"],
+        "masker_params": masker_params,
     }

@@ -1,0 +1,256 @@
+{
+  "name": "aid_preview_assets",
+  "inputs": [
+    {
+      "path": "assets/dog_and_hydrant.jpg",
+      "text": "dog and hydrant"
+    },
+    {
+      "path": "assets/giraffe_drinking.jpg",
+      "text": "giraffe drinking"
+    }
+  ],
+  "single_text": null,
+  "defaults": {
+    "batch_size": 64,
+    "curve_points": 51,
+    "cuda": true,
+    "use_amp": false,
+    "random_state": 0,
+    "text_column": "first_caption"
+  },
+  "models": [
+    {
+      "model_preset": "clip-vit-b-32"
+    },
+    {
+      "model_preset": "siglip-base-p16-224"
+    }
+  ],
+  "strategies": [
+    {
+      "strategy_name": "patch_crossmodal_mean",
+      "segmenter_strategy": "patch",
+      "masker_strategy": "crossmodal_mean",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "patch_crossmodal_blur",
+      "segmenter_strategy": "patch",
+      "masker_strategy": "crossmodal_blur",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "patch_vision_mean",
+      "segmenter_strategy": "patch",
+      "masker_strategy": "vision_mean",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "patch_vision_blur",
+      "segmenter_strategy": "patch",
+      "masker_strategy": "vision_blur",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "patch_text_attn",
+      "segmenter_strategy": "patch",
+      "masker_strategy": "text_attn",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "patch_attention",
+      "segmenter_strategy": "patch",
+      "masker_strategy": "attention",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "slic_crossmodal_mean",
+      "segmenter_strategy": "slic",
+      "masker_strategy": "crossmodal_mean",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "slic_crossmodal_blur",
+      "segmenter_strategy": "slic",
+      "masker_strategy": "crossmodal_blur",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "slic_vision_mean",
+      "segmenter_strategy": "slic",
+      "masker_strategy": "vision_mean",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "slic_vision_blur",
+      "segmenter_strategy": "slic",
+      "masker_strategy": "vision_blur",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "slic_text_attn",
+      "segmenter_strategy": "slic",
+      "masker_strategy": "text_attn",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "slic_attention",
+      "segmenter_strategy": "slic",
+      "masker_strategy": "attention",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": null,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "gradient_guided_crossmodal_mean",
+      "segmenter_strategy": "gradient_guided",
+      "masker_strategy": "crossmodal_mean",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": 49,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "gradient_guided_crossmodal_blur",
+      "segmenter_strategy": "gradient_guided",
+      "masker_strategy": "crossmodal_blur",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": 49,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "gradient_guided_vision_mean",
+      "segmenter_strategy": "gradient_guided",
+      "masker_strategy": "vision_mean",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": 49,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "gradient_guided_vision_blur",
+      "segmenter_strategy": "gradient_guided",
+      "masker_strategy": "vision_blur",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": 49,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "gradient_guided_text_attn",
+      "segmenter_strategy": "gradient_guided",
+      "masker_strategy": "text_attn",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": 49,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    },
+    {
+      "strategy_name": "gradient_guided_attention",
+      "segmenter_strategy": "gradient_guided",
+      "masker_strategy": "attention",
+      "slic_n_segments": 49,
+      "slic_compactness": 10.0,
+      "slic_sigma": 0.0,
+      "gradient_guided_n_segments": 49,
+      "vision_blur_sigma": 3.0,
+      "crossmodal_blur_sigma": 3.0
+    }
+  ],
+  "methods": [
+    {
+      "method_name": "kernelshap_shapley_order1_preview",
+      "mode": "shapley",
+      "order": 1,
+      "explainer_name": "fixlip",
+      "sampler_name": "shapley",
+      "sampler_p": 0.5,
+      "approximation_type": "original",
+      "budget": 512,
+      "sparse_regression": false,
+      "proxy_params": {}
+    },
+    {
+      "method_name": "proxyshap_banzhaf_p05_order2_preview",
+      "mode": "banzhaf/0.5",
+      "order": 2,
+      "explainer_name": "fixlip",
+      "sampler_name": "banzhaf",
+      "sampler_p": 0.5,
+      "approximation_type": "proxyshap",
+      "budget": 50,
+      "sparse_regression": false,
+      "proxy_params": {}
+    }
+  ]
+}

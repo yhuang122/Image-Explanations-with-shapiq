@@ -1,0 +1,13 @@
+{
+  "python": "3.12.13",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "packages": {
+    "numpy": "2.4.4",
+    "torch": "2.4.1+cu118",
+    "transformers": "4.51.3",
+    "shapiq": "1.5.2"
+  },
+  "torch_cuda_available": true,
+  "torch_cuda_device_count": 1,
+  "torch_cuda_device_name": "NVIDIA GeForce RTX 4060 Ti"
+}
