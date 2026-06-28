@@ -24,8 +24,11 @@ MODEL_PRESET_BY_NAME = {model_name: preset for preset, model_name in MODEL_PRESE
 SEGMENTER_CHOICES = ("patch", "slic", "gradient_guided")
 MASKER_CHOICES = (
     "crossmodal_mean",
+    "crossmodal_blur",
     "vision_mean",
+    "vision_blur",
     "text_attn",
+    "attention",
 )
 
 ORIGINAL_PIPELINE = "src.game_huggingface.VisionLanguageGame"
