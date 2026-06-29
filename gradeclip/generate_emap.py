@@ -36,11 +36,9 @@ def imgprocess_keepsize(img, patch_size=[16, 16], scale_factor=1):
 # CLIP
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# clipmodel, preprocess = clip.load("ViT-B/16", device=device)
-# mm_clipmodel, _ = mm_clip.load("ViT-B/16", device=device, jit=False)
-
-clipmodel, preprocess = clip.load("ViT-B/32", device=device)
-mm_clipmodel, _ = mm_clip.load("ViT-B/32", device=device, jit=False)
+clip_model_name = os.environ.get("GRADECLIP_CLIP_MODEL", "ViT-B/16")
+clipmodel, preprocess = clip.load(clip_model_name, device=device)
+mm_clipmodel, _ = mm_clip.load(clip_model_name, device=device, jit=False)
 
 
 def accuracy(output, target, topk=(1,)):

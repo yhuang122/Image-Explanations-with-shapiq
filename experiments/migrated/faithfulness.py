@@ -36,8 +36,8 @@ from pathlib import Path
 import clip
 import torch
 torch.set_float32_matmul_precision("high")
-from transformers import CLIPProcessor, CLIPModel
 import datasets
+from transformers import CLIPProcessor, CLIPModel
 from shapiq import InteractionValues
 import pandas as pd
 
@@ -64,11 +64,15 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=arg
         streaming=True
     )
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     model_huggingface = CLIPModel.from_pretrained(MODEL_NAME)
-    model_huggingface.to(0)
+    model_huggingface.to(device)
     processor_huggingface = CLIPProcessor.from_pretrained(MODEL_NAME)
 
-    model_openai, processor_openai = clip.load("ViT-B/32" if MODEL_NAME.endswith("32") else "ViT-B/16", device=1)
+    model_openai, processor_openai = clip.load(
+        "ViT-B/32" if MODEL_NAME.endswith("32") else "ViT-B/16",
+        device=device,
+    )
 
     factory = ImageImputerFactory()
 
@@ -139,7 +143,7 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=arg
         print(f'iter: {n_iter}/{STOP - START}', flush=True)
         input_image = d['jpg']
         input_text = d['txt'].split("\n")[df_metadata.loc[i, "best_text_id"].item()]
-        imputer = factory.build(model_huggingface, processor_huggingface, input_image, input_text, segmenter=None, masker=None)
+        imputer = factory.build(model_huggingface, processor_huggingface, input_image, input_text)
         game_huggingface = VisionLanguageGame(imputer, batch_size=BATCH_SIZE)
         game_openai = src.game_openai.CLIPGame(
             model_openai, processor_openai,
