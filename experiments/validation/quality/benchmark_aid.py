@@ -629,6 +629,8 @@ def run_suite(args: argparse.Namespace, suite: dict[str, Any], output_dir) -> di
                         append_rows(curves_path, CURVE_FIELDS, curve_rows)
                         run_count += 1
 
+                    if game is not None:
+                        game.cleanup()
                     del game
 
                 if device.type == "cuda":
