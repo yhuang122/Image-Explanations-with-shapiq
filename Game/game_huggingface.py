@@ -64,6 +64,14 @@ class VisionLanguageGame(Game):
         """HuggingFace processor for image/text preprocessing."""
         return self._imputer.processor
 
+    def cleanup(self) -> None:
+        """Release any persistent model state held by the imputer's masker.
+
+        Must be called when this game is discarded if the model is reused
+        across games (e.g. AttentionMasker leaves forward hooks on the model).
+        """
+        self._imputer.cleanup()
+
     # ─── Value functions (delegate to Imputer) ───────────────────────────
 
     def value_function(self, coalitions, batch_size=None):

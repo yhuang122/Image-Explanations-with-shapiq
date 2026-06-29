@@ -83,6 +83,18 @@ class ImageImputer:
     def n_players(self) -> int:
         return self.n_players_image + self.n_players_text
 
+    def cleanup(self) -> None:
+        """Release any persistent model state held by the masker.
+
+        Maskers that register forward hooks on the shared model (e.g.
+        ``AttentionMasker``) must drop them here so they do not leak onto a
+        model reused across imputers and corrupt later forward passes.
+        No-op for stateless maskers.
+        """
+        remove_hooks = getattr(self.masker, "remove_hooks", None)
+        if callable(remove_hooks):
+            remove_hooks()
+
     # ─── Public API ───────────────────────────────────────────────────────
 
     def forward_1d(
