@@ -369,7 +369,57 @@ Attention), plus a 2×3 summary grid across dog & hydrant + 4 MSCOCO images.
 ![example_attention_masker](data/report_pictures/example_attention_masker.png)
 
 ### `insertion_deletion.ipynb`
-AID curve computation and plotting.
+
+**AID evaluation pipeline — insertion/deletion curves + area-between-curves metric.**
+
+End-to-end pipeline from FIxLIP approximation through MIF/LIF deletion curves to
+paper-style AID visualization. Validates that the new `ImageImputerFactory` pipeline
+is numerically equivalent to the old `src.game_huggingface` pipeline, then scales to
+10 MSCOCO images with reusable `compute_aid_for_image()` function.
+
+| Setting | Value |
+|---|---|
+| Model | CLIP ViT-B/32 (`openai/clip-vit-base-patch32`) |
+| Image / text | `assets/dog_and_hydrant.png` / "black dog next to a yellow hydrant" |
+| Extra | 10 MSCOCO images (`clip-benchmark/wds_mscoco_captions`) |
+| Approximator | FIxLIP, Banzhaf/0.5, max_order=2, budget 2¹⁸ |
+| Segmenter | patch (49 image players + 8 text players) |
+| Masker | `crossmodal_mean` (default) |
+
+```python
+from ImputerFactory import ImageImputerFactory
+from Game import VisionLanguageGame
+
+factory = ImageImputerFactory()
+imputer = factory.build(model, processor, image, text)
+game = VisionLanguageGame(imputer, batch_size=64)
+
+# FIxLIP → 1st-order attributions → MIF/LIF coalitions → value_function
+fixlip = src.fixlip.FIxLIP(n_players_image=49, n_players_text=8,
+                            max_order=2, p=0.5, mode="banzhaf", random_state=0)
+iv = fixlip.approximate_crossmodal(game, budget=2**18)
+```
+
+**Validation.** 200 random coalitions compared between the old (`src.game_huggingface`)
+and new (`ImageImputerFactory + Game`) pipelines: **max_diff = 0.000000** — the two
+pipelines are numerically equivalent.
+
+**Results.** MIF and LIF deletion curves are normalized per the paper convention
+(using MIF's own full/empty coalition values). Curves from multiple images are
+interpolated to a common 100-point grid, averaged, and Gaussian-smoothed (σ=2).
+
+| Metric | Value |
+|---|---:|
+| Numerical equivalence (max_diff) | 0.000000 |
+| MSCOCO AID (mean ± std, 10 images) | 0.51 ± 0.10 |
+| Single-image AID (dog & hydrant) | 0.57 |
+
+The notebook produces three paper-style figures: single-image insertion/deletion
+curves with "insert"/"delete" annotations, a 2×5 grid of individual MSCOCO sample
+curves, and the 10-image averaged curve with ±1σ shaded regions.
+
+![insertion_deletion_single](data/report_pictures/insertion_deletion_single.png)
+![insertion_deletion_mscoco](data/report_pictures/insertion_deletion_mscoco.png)
 
 ---
 
