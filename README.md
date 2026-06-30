@@ -104,29 +104,31 @@ Area under the insertion/deletion curve — higher is better.
 
 Positive Gradient Removal (PGR) accuracy — does the explanation correctly identify the
 image region most responsible for the prediction?
+Token-level PGR breaks this down by the four class tokens and their corresponding image regions.
 
 | Scripts | `experiments/migrated/pointing_game_banzhaf.py`, `*_shapley.py`, `*_crossmodal.py` |
 |---|---|
 
 #### Banzhaf Interactions
 
-| Model | Segmenter | PGR ↑ |
-|---|---:|---:|
-| CLIP ViT-B/32 | patch | — |
+| Model | Segmenter | PGR ↑ | banana | cat | tractor | ball |
+|---|---|---:|---:|---:|---:|---:|
+| CLIP ViT-B/32 | patch | 0.745 ± 0.079 | 0.683 | 0.778 | 0.830 | 0.688 |
 
 #### Shapley Interactions
 
-| Model | Segmenter | PGR ↑ |
-|---|---:|---:|
-| CLIP ViT-B/32 | patch | — |
+| Model | Segmenter | PGR ↑ | banana | cat | tractor | ball |
+|---|---|---:|---:|---:|---:|---:|
+| CLIP ViT-B/32 | patch | 0.763 ± 0.074 | 0.753 | 0.804 | 0.847 | 0.646 |
 
 #### Crossmodal (Banzhaf)
 
-| Model | Segmenter | PGR ↑ |
-|---|---:|---:|
-| CLIP ViT-B/32 | patch | — |
+| Model | Segmenter | PGR ↑ | banana | cat | tractor | ball |
+|---|---|---:|---:|---:|---:|---:|
+| CLIP ViT-B/32 | patch | 0.744 ± 0.085 | 0.696 | 0.779 | 0.816 | 0.687 |
 
 <img src="data/report_pictures/pointing_game.png" width="400" alt="pointing_game">
+<img src="data/report_pictures/pointing_game_token_pgr.png" width="400" alt="pointing_game_token_pgr">
 
 ---
 

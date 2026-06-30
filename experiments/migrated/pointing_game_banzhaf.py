@@ -55,7 +55,7 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
     input_text = CLASS_LABELS.replace("_", " ")
     factory = VisionImputerFactory()
 
-    for i in range(20):
+    for i in range(10):
         input_image = Image.open(os.path.join(PATH_INPUT, f'{i}.jpg'))
         imputer = factory.build(
             model,
@@ -89,10 +89,10 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
             budget=BUDGET,
             interaction_lookup=interaction_lookup
         )
-        interaction_values.save(os.path.join(PATH_OUTPUT, f'iv_order2_{i}.json'))
+        interaction_values.save(Path(PATH_OUTPUT) / f'iv_order2_{i}.json')
 
         banzhaf_values = src.utils.convert_iv_to_first_order(interaction_values)
-        banzhaf_values.save(os.path.join(PATH_OUTPUT, f'iv_order1_{i}.json'))
+        banzhaf_values.save(Path(PATH_OUTPUT) / f'iv_order1_{i}.json')
 
         ## visualize explanations
         text_tokens = game.inputs.tokens()
