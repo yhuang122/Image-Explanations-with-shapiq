@@ -190,7 +190,19 @@ class VisionImputerFactory:
             kwargs["max_length"] = 64
         elif model_type == "clip":
             kwargs["padding"] = True
-        outputs = processor(**kwargs)
+        try:
+            outputs = processor(**kwargs)
+        except AttributeError:
+            # Fallback for Fast processors (Transformers 4.51+):
+            # CLIPProcessor.__call__ accesses image_processor._valid_processor_keys
+            # which CLIPImageProcessorFast does not have.
+            image_kwargs = {k: v for k, v in kwargs.items()
+                            if k in ("images", "return_tensors")}
+            text_kwargs = {k: v for k, v in kwargs.items()
+                           if k in ("text", "return_tensors", "padding", "max_length")}
+            image_outputs = processor.image_processor(**image_kwargs)
+            text_outputs = processor.tokenizer(**text_kwargs)
+            outputs = {**image_outputs, **text_outputs}
         if "attention_mask" not in outputs:
             outputs["attention_mask"] = (outputs["input_ids"] != 1).long()
         return outputs
