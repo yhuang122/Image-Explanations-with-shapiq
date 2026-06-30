@@ -52,7 +52,18 @@ start_time = time.time()
 
 import wandb
 
-with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=args) as run:
+
+def load_optional_interaction(*parts: str) -> InteractionValues | None:
+    """Load optional baseline outputs saved as either JSON or pickle."""
+    base_path = os.path.join(*parts)
+    for suffix in (".json", ".pkl"):
+        path = base_path + suffix
+        if os.path.isfile(path):
+            return InteractionValues.load(path)
+    return None
+
+
+with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=args, mode=os.environ.get("WANDB_MODE", "disabled")) as run:
 
     RESULT_DATA: list[dict[str, float]] = []
 
@@ -67,7 +78,7 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=arg
 
     model_huggingface = CLIPModel.from_pretrained(MODEL_NAME)
     model_huggingface.to(DEVICE)
-    processor_huggingface = CLIPProcessor.from_pretrained(MODEL_NAME, use_fast=True)
+    processor_huggingface = CLIPProcessor.from_pretrained(MODEL_NAME, use_fast=False)
 
     model_openai, processor_openai = clip.load("ViT-B/32" if MODEL_NAME.endswith("32") else "ViT-B/16", device=DEVICE)
 
@@ -119,27 +130,22 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=arg
 
         # gradeclip --------------------------------------------------------------------------------
 
-        gradeclip_path = os.path.join(PATH_INPUT, MODEL_NAME, "gradeclip", f"iv_order1_{i}.json")
-        if os.path.isfile(gradeclip_path):
-            gradeclip_1 = InteractionValues.load(gradeclip_path)
+        gradeclip_1 = load_optional_interaction(PATH_INPUT, MODEL_NAME, "gradeclip", f"iv_order1_{i}")
+        if gradeclip_1 is not None:
             explanations_openai["gradeclip_1"] = gradeclip_1
 
 
         # game ---------------------------------------------------------------------------------
 
-        game_path = os.path.join(PATH_INPUT, MODEL_NAME, "game", f"iv_order1_{i}.json")
-        if os.path.isfile(game_path):
-            game_1 = InteractionValues.load(game_path)
+        game_1 = load_optional_interaction(PATH_INPUT, MODEL_NAME, "game", f"iv_order1_{i}")
+        if game_1 is not None:
             explanations_openai["game_1"] = game_1
 
 
-        # try: # oom error for vit-b/16
-        #     # exclip --------------------------------------------------------------------------------
-        #     interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "exclip", f"iv_order2_{i}.json")
-        #     exclip_2 = InteractionValues.load(interaction_path)
-        #     explanations_openai["exclip_2"] = exclip_2
-        # except:
-        #     pass
+        # exclip --------------------------------------------------------------------------------
+        exclip_2 = load_optional_interaction(PATH_INPUT, MODEL_NAME, "exclip", f"iv_order2_{i}")
+        if exclip_2 is not None:
+            explanations_openai["exclip_2"] = exclip_2
 
         # load image/text and create games ----------------------------------------------------------
         n_iter += 1
