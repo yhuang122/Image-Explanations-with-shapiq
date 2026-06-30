@@ -25,6 +25,9 @@ RED = Color("#ff0d57")
 BLUE = Color("#1e88e5")
 NEUTRAL = Color("#ffffff")
 LINES = Color("#cccccc")
+INTERACTION_EDGE_RED = Color("#b00020")
+INTERACTION_EDGE_ALPHA_FLOOR = 0.55
+INTERACTION_EDGE_WIDTH_SCALE = 0.16
 
 COLORS_K_SII = [
     "#D81B60",
@@ -76,7 +79,14 @@ def draw_fancy_hyper_edges(
 
         color = colors[hyper_edge][:3]
         alpha = colors[hyper_edge][3]
-        node_size = 0.1  * alpha
+        if color[0] >= color[2]:
+            color = (
+                INTERACTION_EDGE_RED.get_red(),
+                INTERACTION_EDGE_RED.get_green(),
+                INTERACTION_EDGE_RED.get_blue(),
+            )
+        alpha = max(alpha, INTERACTION_EDGE_ALPHA_FLOOR)
+        node_size = INTERACTION_EDGE_WIDTH_SCALE * alpha
         if debug:
             print("hyper_edge:", hyper_edge, "color", color, "alpha", alpha, "node_size", node_size)
 

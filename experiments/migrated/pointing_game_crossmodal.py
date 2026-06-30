@@ -59,7 +59,7 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
     input_text = CLASS_LABELS.replace("_", " ")
     factory = VisionImputerFactory()
 
-    for i in range(50):
+    for i in range(20):
         if "siglip2" not in MODEL_NAME and "siglip" in MODEL_NAME and "husky" in input_text:
             break
         input_image = Image.open(os.path.join(PATH_INPUT, f'{i}.jpg'))
@@ -100,10 +100,10 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
             budget_image=budget_image,
             interaction_lookup=interaction_lookup
         )
-        interaction_values.save(os.path.join(PATH_OUTPUT, f'iv_order2_{i}.pkl'))
+        interaction_values.save(os.path.join(PATH_OUTPUT, f'iv_order2_{i}.json'))
 
         banzhaf_values = src.utils.convert_iv_to_first_order(interaction_values)
-        banzhaf_values.save(os.path.join(PATH_OUTPUT, f'iv_order1_{i}.pkl'))
+        banzhaf_values.save(os.path.join(PATH_OUTPUT, f'iv_order1_{i}.json'))
 
         ## visualize explanations
         if imputer.model_type == "siglip":
