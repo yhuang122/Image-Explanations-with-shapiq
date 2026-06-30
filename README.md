@@ -83,12 +83,20 @@ Area under the insertion/deletion curve — higher is better.
 
 | Script | `experiments/migrated/insertion_deletion.py` (CLIP) / `*_siglip.py` |
 |---|---|
-
+<!-- 
 | Model | Segmenter | Masker | AID ↑ | Insertion ↑ | Deletion ↓ |
 |---|---:|---:|---:|---:|---:|
-| CLIP ViT-B/32 | patch | crossmodal_mean | — | — | — |
+| CLIP ViT-B/32 | patch | crossmodal_mean | 1.431 | 0.920 | −0.510 | -->
 
-<img src="data/report_pictures/insertion_deletion_clip.png" width="400" alt="aid_clip">
+AID ↑ (area between the insertion and deletion curves; higher is better).
+
+| Model | Segmenter | Masker | Shapley | FIxLIP p=0.3 | FIxLIP p=0.5 | FIxLIP p=0.7 |
+|---|---:|---:|---:|---:|---:|---:|
+| CLIP ViT-B/32 | patch | crossmodal_mean | 0.57 | 0.46 | 0.35 | 0.32 |
+
+<img src="data/report_pictures/insertion_deletion_clip.jpg" width="400" alt="aid_clip">
+
+> _Run Specification: budget 2048, batch size 64, 100 images._
 
 #### SigLIP
 
