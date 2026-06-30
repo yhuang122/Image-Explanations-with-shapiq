@@ -50,10 +50,8 @@ def compute_weighted_r2(
         weights: The weights for each coalition size as a numpy array of shape (n_sizes,).
     """
     n_players = np.shape(weights)[0] - 1
-    weights_per_coal = np.zeros(gt_values.shape)
-    for i in range(gt_values.shape[0]):
-        coalition_size = np.sum(coalition_matrix[i])
-        weights_per_coal[i] = weights[coalition_size]/sp.special.binom(n_players,coalition_size)
+    coalition_sizes = np.sum(coalition_matrix, axis=1)
+    weights_per_coal = weights[coalition_sizes] / sp.special.binom(n_players, coalition_sizes)
 
     # Compute the weighted mean of the ground truth values
     weighted_mean_gt = np.average(gt_values, weights=weights_per_coal)

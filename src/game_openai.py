@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 import numpy as np
 
 try:
@@ -23,6 +21,7 @@ class CLIPGame(Game):
         self.batch_size = batch_size
 
         self.inputs = self._processor_function([input_image], [input_text])
+        self.inputs_single = self.inputs  # single-sample reference for expand reuse
 
         self.image_size = model.visual.input_resolution
         self.patch_size = patch_size
@@ -83,7 +82,10 @@ class CLIPGame(Game):
         # [n_coallitions, n_channels, image_size, image_size]
         image_binary_masks = self._generate_image_binary_mask(coalitions_image)
         
-        inputs_original = self._processor_function([self.input_image] * batch_size, [self.input_text] * batch_size)
+        inputs_original = [
+            self.inputs_single[0].expand(batch_size, -1, -1, -1).clone(),
+            self.inputs_single[1].expand(batch_size, -1).clone(),
+        ]
 
         #:# batch processing
         batch_iters = n_coalitions // batch_size
@@ -91,7 +93,7 @@ class CLIPGame(Game):
         coalitions_outputs = []
         for batch_index in range(batch_iters + 1):
             if batch_index < batch_iters:
-                inputs = deepcopy(inputs_original)
+                inputs = [inputs_original[0].clone(), inputs_original[1].clone()]
                 inputs[0] = (inputs[0] * image_binary_masks[(batch_index * batch_size):((batch_index + 1) * batch_size)]).to(self.device)
                 inputs[1] = (inputs[1] * text_binary_masks[(batch_index * batch_size):((batch_index + 1) * batch_size)] +\
                              289 * (1 - text_binary_masks[(batch_index * batch_size):((batch_index + 1) * batch_size)])).to(self.device)
@@ -131,7 +133,10 @@ class CLIPGame(Game):
         # [n_coallitions, n_channels, image_size, image_size]
         image_binary_masks = self._generate_image_binary_mask(torch.from_numpy(coalitions_image))
 
-        inputs_original = self._processor_function([self.input_image] * batch_size, [self.input_text] * batch_size)
+        inputs_original = [
+            self.inputs_single[0].expand(batch_size, -1, -1, -1).clone(),
+            self.inputs_single[1].expand(batch_size, -1).clone(),
+        ]
 
         #:# batch processing
         batch_iters_image = n_coalitions_image // batch_size
@@ -139,13 +144,16 @@ class CLIPGame(Game):
         batch_left_image = n_coalitions_image % batch_size
         batch_left_text = n_coalitions_text % batch_size
         if batch_left_text > 0: # to be copied in (batch_iters_image - 1) iterations
-            inputs_left_text = self._processor_function([self.input_image] * batch_size, [self.input_text] * batch_left_text)
+            inputs_left_text = [
+                self.inputs_single[0].expand(batch_size, -1, -1, -1).clone(),
+                self.inputs_single[1].expand(batch_left_text, -1).clone(),
+            ]
 
         coalitions_outputs = []
         for batch_index_image in range(batch_iters_image + 1):
             coalitions_outputs_image = []
             if batch_index_image < batch_iters_image:
-                inputs_image = deepcopy(inputs_original)
+                inputs_image = [inputs_original[0].clone(), inputs_original[1].clone()]
                 inputs_image[0] = (inputs_image[0] *\
                               image_binary_masks[(batch_index_image * batch_size):((batch_index_image + 1) * batch_size)]).to(self.device)
             elif batch_left_image > 0: # process last image batch (once)
@@ -156,12 +164,12 @@ class CLIPGame(Game):
                 break 
             for batch_index_text in range(batch_iters_text + 1):
                 if batch_index_text < batch_iters_text:
-                    inputs = deepcopy(inputs_image)
+                    inputs = [inputs_image[0].clone(), inputs_image[1].clone()]
                     inputs[1] = (inputs[1] *\
                                   text_binary_masks[(batch_index_text * batch_size):((batch_index_text + 1) * batch_size)] +\
                                     289 * (1 - text_binary_masks[(batch_index_text * batch_size):((batch_index_text + 1) * batch_size)])).to(self.device)
                 elif batch_left_text > 0 and batch_index_image < batch_iters_image: # process last text batch in non-terminal image batch
-                    inputs = deepcopy(inputs_left_text)
+                    inputs = [inputs_left_text[0].clone(), inputs_left_text[1].clone()]
                     inputs[0] = (inputs[0] *\
                                 image_binary_masks[(batch_index_image * batch_size):((batch_index_image + 1) * batch_size)]).to(self.device)
                     inputs[1] = (inputs[1] *\

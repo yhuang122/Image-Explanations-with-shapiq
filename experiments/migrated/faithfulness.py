@@ -35,6 +35,7 @@ from pathlib import Path
 
 import clip
 import torch
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.set_float32_matmul_precision("high")
 from transformers import CLIPProcessor, CLIPModel
 import datasets
@@ -65,10 +66,10 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=arg
     )
 
     model_huggingface = CLIPModel.from_pretrained(MODEL_NAME)
-    model_huggingface.to(0)
-    processor_huggingface = CLIPProcessor.from_pretrained(MODEL_NAME)
+    model_huggingface.to(DEVICE)
+    processor_huggingface = CLIPProcessor.from_pretrained(MODEL_NAME, use_fast=True)
 
-    model_openai, processor_openai = clip.load("ViT-B/32" if MODEL_NAME.endswith("32") else "ViT-B/16", device=1)
+    model_openai, processor_openai = clip.load("ViT-B/32" if MODEL_NAME.endswith("32") else "ViT-B/16", device=DEVICE)
 
     factory = VisionImputerFactory()
 
@@ -83,63 +84,69 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=arg
 
         # banzhaf 0.3  -------------------------------------------------------------------------
         banzhaf_p = "0.3"
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order1_{i}.pkl")
+        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order1_{i}.json")
         banzhaf_1_03 = InteractionValues.load(interaction_path)
         explanations_huggingface["banzhaf_1_03"] = banzhaf_1_03
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order2_{i}.pkl")
+        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order2_{i}.json")
         banzhaf_2_03 = InteractionValues.load(interaction_path)
         explanations_huggingface["banzhaf_2_03"] = banzhaf_2_03
 
         # banzhaf 0.5  -------------------------------------------------------------------------
         banzhaf_p = "0.5"
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order1_{i}.pkl")
+        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order1_{i}.json")
         banzhaf_1_05 = InteractionValues.load(interaction_path)
         explanations_huggingface["banzhaf_1_05"] = banzhaf_1_05
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order2_{i}.pkl")
+        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order2_{i}.json")
         banzhaf_2_05 = InteractionValues.load(interaction_path)
         explanations_huggingface["banzhaf_2_05"] = banzhaf_2_05
 
         # banzhaf 0.7  -------------------------------------------------------------------------
         banzhaf_p = "0.7"
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order1_{i}.pkl")
+        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order1_{i}.json")
         banzhaf_1_07 = InteractionValues.load(interaction_path)
         explanations_huggingface["banzhaf_1_07"] = banzhaf_1_07
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order2_{i}.pkl")
+        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "banzhaf", banzhaf_p, f"iv_order2_{i}.json")
         banzhaf_2_07 = InteractionValues.load(interaction_path)
         explanations_huggingface["banzhaf_2_07"] = banzhaf_2_07
 
         # shapley ------------------------------------------------------------------------------
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "shapley", f"iv_order1_{i}.pkl")
+        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "shapley", f"iv_order1_{i}.json")
         shapley_1 = InteractionValues.load(interaction_path)
         explanations_huggingface["shapley_1"] = shapley_1
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "shapley", f"iv_order2_{i}.pkl")
+        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "shapley", f"iv_order2_{i}.json")
         shapley_2 = InteractionValues.load(interaction_path)
         explanations_huggingface["shapley_2"] = shapley_2
 
         # gradeclip --------------------------------------------------------------------------------
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "gradeclip", f"iv_order1_{i}.pkl")
-        gradeclip_1 = InteractionValues.load(interaction_path)
-        explanations_openai["gradeclip_1"] = gradeclip_1
+
+        gradeclip_path = os.path.join(PATH_INPUT, MODEL_NAME, "gradeclip", f"iv_order1_{i}.json")
+        if os.path.isfile(gradeclip_path):
+            gradeclip_1 = InteractionValues.load(gradeclip_path)
+            explanations_openai["gradeclip_1"] = gradeclip_1
+
 
         # game ---------------------------------------------------------------------------------
-        interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "game", f"iv_order1_{i}.pkl")
-        game_1 = InteractionValues.load(interaction_path)
-        explanations_openai["game_1"] = game_1
 
-        try: # oom error for vit-b/16
-            # exclip --------------------------------------------------------------------------------
-            interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "exclip", f"iv_order2_{i}.pkl")
-            exclip_2 = InteractionValues.load(interaction_path)
-            explanations_openai["exclip_2"] = exclip_2
-        except:
-            pass
+        game_path = os.path.join(PATH_INPUT, MODEL_NAME, "game", f"iv_order1_{i}.json")
+        if os.path.isfile(game_path):
+            game_1 = InteractionValues.load(game_path)
+            explanations_openai["game_1"] = game_1
+
+
+        # try: # oom error for vit-b/16
+        #     # exclip --------------------------------------------------------------------------------
+        #     interaction_path = os.path.join(PATH_INPUT, MODEL_NAME, "exclip", f"iv_order2_{i}.json")
+        #     exclip_2 = InteractionValues.load(interaction_path)
+        #     explanations_openai["exclip_2"] = exclip_2
+        # except:
+        #     pass
 
         # load image/text and create games ----------------------------------------------------------
         n_iter += 1
         print(f'iter: {n_iter}/{STOP - START}', flush=True)
         input_image = d['jpg']
         input_text = d['txt'].split("\n")[df_metadata.loc[i, "best_text_id"].item()]
-        imputer = factory.build(model_huggingface, processor_huggingface, input_image, input_text, segmenter=None, masker=None)
+        imputer = factory.build(model_huggingface, processor_huggingface, input_image, input_text, segmenter_config=None, masker_config=None)
         game_huggingface = VisionLanguageGame(imputer, batch_size=BATCH_SIZE)
         game_openai = src.game_openai.CLIPGame(
             model_openai, processor_openai,

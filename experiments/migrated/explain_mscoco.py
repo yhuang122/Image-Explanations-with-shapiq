@@ -196,8 +196,8 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/explain', config=args) as run:
                     interaction_lookup=interaction_lookup
                 )
 
-        attribution_values.save(os.path.join(PATH_OUTPUT, f'iv_order1_{i}.pkl'))
-        interaction_values.save(os.path.join(PATH_OUTPUT, f'iv_order2_{i}.pkl'))
+        attribution_values.save(Path(os.path.join(PATH_OUTPUT, f'iv_order1_{i}.json')))
+        interaction_values.save(Path(os.path.join(PATH_OUTPUT, f'iv_order2_{i}.json')))
 
         ## visualize explanations
         text_tokens = game.inputs.tokens()
