@@ -98,13 +98,13 @@ AID ↑ (area between the insertion and deletion curves; higher is better).
 
 > _Run Specification: budget 2048, batch size 64, 100 images._
 
-#### SigLIP
+<!-- #### SigLIP
 
 | Model | Segmenter | Masker | AID ↑ |
 |---|---:|---:|--|
 | SigLIP base-patch16 | patch | crossmodal_mean | — |
 
-<img src="data/report_pictures/insertion_deletion_siglip.png" width="400" alt="aid_siglip">
+<img src="data/report_pictures/insertion_deletion_siglip.png" width="400" alt="aid_siglip"> -->
 
 ---
 
