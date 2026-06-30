@@ -201,11 +201,15 @@ without crashing, and runs the full FIxLIP/AID pipeline.
 |---|---:|---:|---:|---:|---:|
 | CLIP ResNet-50 | 42 | 15.5 | 29.77 | 0.612 | 0.27 GB |
 
-The notebook produces two figures: the SLIC superpixel boundaries (showing the
-content-adaptive, non-grid layout) and the full image+text Shapley-interaction
-explanation mapped through the superpixel layout.
+The notebook produces two figures. First, the SLIC superpixel boundaries, showing the
+content-adaptive, non-grid layout used as image players:
 
 ![example_slic](data/report_pictures/example_slic.png)
+
+Second, the full image+text Shapley-interaction explanation mapped through the
+superpixel layout:
+
+![example_slic_explanation](data/report_pictures/example_slic_explanation.png)
 
 ### `example_blur.ipynb`
 
