@@ -63,17 +63,35 @@ See notebooks below for end-to-end examples.
 ### 1. Faithfulness
 
 How well do Shapley-interaction explanations predict the model's output under coalition
-occlusion?
+occlusion? We evaluate this by comparing explanation scores against output changes from
+random coalition masking. Higher Pearson/Spearman correlation is better, and lower MSE is
+better.
 
-| Script | `experiments/migrated/faithfulness.py` |
+| Setting | Value |
 |---|---|
-| Models | CLIP ViT-B/32, ViT-B/16, ViT-L/14; SigLIP |
+| Model | CLIP ViT-B/32 |
+| Segmenter / masker | patch / crossmodal_mean |
+| Evaluation set | 20 MS COCO samples, 1000 evaluation coalitions per image |
 
-| Model | Segmenter | Masker | Pearson r | Spearman ρ | MSE |
-|---|---:|---:|---:|---:|---:|
-| CLIP ViT-B/32 | patch | crossmodal_mean | — | — | — |
+Reported method comparison at `p=0.5`:
+
+| Method | Pearson r ↑ | Spearman ρ ↑ | MSE ↓ |
+|---|---:|---:|---:|
+| exCLIP | 0.390 | 0.365 | 22.442 |
+| GAME | 0.180 | 0.165 | 22.155 |
+| Grad-ECLIP | 0.262 | 0.242 | 18.127 |
+| Shapley values | 0.825 | 0.777 | 29.099 |
+| Banzhaf values, p=0.5 | 0.234 | 0.222 | 20.749 |
+| FIxLIP WBI, p=0.5 | 0.362 | 0.341 | 13.872 |
 
 <img src="data/report_pictures/faithfulness.png" width="400" alt="faithfulness">
+
+Additional result figures:
+
+| Metric | Method comparison | p-sweep |
+|---|---|---|
+| R² | [`p=0.5`](faithfulness_clip-32_r2_methods_0.5_rotated.pdf), [`p=0.7`](faithfulness_clip-32_r2_methods_0.7_rotated.pdf) | [`appendix`](appendix/faithfulness_clip-32_r2.pdf) |
+| Spearman ρ | [`p=0.5`](faithfulness_clip-32_spearman_correlation_methods_0.5_rotated.pdf), [`p=0.7`](faithfulness_clip-32_spearman_correlation_methods_0.7_rotated.pdf) | [`appendix`](appendix/faithfulness_clip-32_spearman_correlation.pdf) |
 
 ---
 
@@ -114,29 +132,26 @@ Positive Gradient Removal (PGR) accuracy — does the explanation correctly iden
 image region most responsible for the prediction?
 Token-level PGR breaks this down by the four class tokens and their corresponding image regions.
 
-| Scripts | `experiments/migrated/pointing_game_banzhaf.py`, `*_shapley.py`, `*_crossmodal.py` |
+| Setting | Value |
 |---|---|
+| Model | CLIP ViT-B/32 |
+| Segmenter | patch |
+| Metric | PGR accuracy, token-level PGR |
 
-#### Banzhaf Interactions
+#### Results
 
-| Model | Segmenter | PGR ↑ | banana | cat | tractor | ball |
-|---|---|---:|---:|---:|---:|---:|
-| CLIP ViT-B/32 | patch | 0.745 ± 0.079 | 0.683 | 0.778 | 0.830 | 0.688 |
+| Explanation | PGR ↑ | banana | cat | tractor | ball |
+|---|---:|---:|---:|---:|---:|
+| Banzhaf interactions | 0.745 ± 0.079 | 0.683 | 0.778 | 0.830 | 0.688 |
+| Shapley interactions | 0.763 ± 0.074 | 0.753 | 0.804 | 0.847 | 0.646 |
+| Crossmodal Banzhaf | 0.744 ± 0.085 | 0.696 | 0.779 | 0.816 | 0.687 |
 
-#### Shapley Interactions
-
-| Model | Segmenter | PGR ↑ | banana | cat | tractor | ball |
-|---|---|---:|---:|---:|---:|---:|
-| CLIP ViT-B/32 | patch | 0.763 ± 0.074 | 0.753 | 0.804 | 0.847 | 0.646 |
-
-#### Crossmodal (Banzhaf)
-
-| Model | Segmenter | PGR ↑ | banana | cat | tractor | ball |
-|---|---|---:|---:|---:|---:|---:|
-| CLIP ViT-B/32 | patch | 0.744 ± 0.085 | 0.696 | 0.779 | 0.816 | 0.687 |
-
-<img src="data/report_pictures/pointing_game.png" width="400" alt="pointing_game">
-<img src="data/report_pictures/pointing_game_token_pgr.png" width="400" alt="pointing_game_token_pgr">
+<table>
+<tr>
+  <td><img src="data/report_pictures/pointing_game.png" width="400" alt="pointing_game"></td>
+  <td><img src="data/report_pictures/pointing_game_token_pgr.png" width="400" alt="pointing_game_token_pgr"></td>
+</tr>
+</table>
 
 ---
 
