@@ -78,7 +78,7 @@ with wandb.init(project="", name=f'{PATH_OUTPUT}/{MODEL_NAME}/faith', config=arg
 
     model_huggingface = CLIPModel.from_pretrained(MODEL_NAME)
     model_huggingface.to(DEVICE)
-    processor_huggingface = CLIPProcessor.from_pretrained(MODEL_NAME, use_fast=False)
+    processor_huggingface = CLIPProcessor.from_pretrained(MODEL_NAME, use_fast=True)
 
     model_openai, processor_openai = clip.load("ViT-B/32" if MODEL_NAME.endswith("32") else "ViT-B/16", device=DEVICE)
 

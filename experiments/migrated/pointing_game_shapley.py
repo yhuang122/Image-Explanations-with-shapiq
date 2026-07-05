@@ -8,6 +8,7 @@ parser.add_argument('--class_labels', type=str)
 parser.add_argument('--budget', type=int)
 parser.add_argument('--batch_size', default=64, type=int)
 parser.add_argument('--random_state', default=0, type=int)
+parser.add_argument('--num_images', default=10, type=int)
 args = parser.parse_args()
 MODEL_NAME = args.model_name
 PATH_INPUT = args.path_input
@@ -17,9 +18,11 @@ CLASS_LABELS = args.class_labels
 BUDGET = args.budget
 BATCH_SIZE = args.batch_size
 RANDOM_STATE = args.random_state
+NUM_IMAGES = args.num_images
 
 print(f'-- Input: {PATH_INPUT}', flush=True)
 print(f'-- Output: {PATH_OUTPUT}', flush=True)
+print(f'-- Num images: {NUM_IMAGES}', flush=True)
 
 import torch
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -49,11 +52,11 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
 
     model = CLIPModel.from_pretrained(MODEL_NAME)
     model.to(DEVICE)
-    processor = CLIPProcessor.from_pretrained(MODEL_NAME)
+    processor = CLIPProcessor.from_pretrained(MODEL_NAME, use_fast=True)
     input_text = CLASS_LABELS.replace("_", " ")
     factory = VisionImputerFactory()
 
-    for i in range(10):
+    for i in range(NUM_IMAGES):
         input_image = Image.open(os.path.join(PATH_INPUT, f'{i}.jpg'))
         imputer = factory.build(
             model,
@@ -92,7 +95,10 @@ with wandb.init(project="", name=PATH_OUTPUT, config=args) as run:
         banzhaf_values.save(Path(PATH_OUTPUT) / f'iv_order1_{i}.json')
 
         ## visualize explanations
-        text_tokens = game.inputs.tokens()
+        if hasattr(game.inputs, "tokens"):
+            text_tokens = game.inputs.tokens()
+        else:
+            text_tokens = game.processor.tokenizer.convert_ids_to_tokens(game.inputs["input_ids"][0])
         text_tokens = text_tokens[1:-1]
         text_tokens = [token.replace('</w>', '') for token in text_tokens]
         assert len(text_tokens) == game.n_players_text
